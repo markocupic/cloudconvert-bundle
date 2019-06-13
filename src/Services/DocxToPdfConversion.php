@@ -48,11 +48,9 @@ class DocxToPdfConversion
     protected $createUncached = false;
 
     /**
-     * Creates a new object instance.
-     *
+     * DocxToPdfConversion constructor.
      * @param string $docxSrc
      * @param string $apiKey
-     * @return static
      */
     public function __construct(string $docxSrc, string $apiKey)
     {
@@ -65,7 +63,6 @@ class DocxToPdfConversion
 
         $this->docxSrc = $docxSrc;
         $this->apiKey = $apiKey;
-        return $this;
     }
 
     /**

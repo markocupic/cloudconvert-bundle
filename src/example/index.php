@@ -1,5 +1,6 @@
 <?php
 
 $destFilename = 'files/mswordfile.docx';
-$objConversion = new DocxToPdfConversion($destFilename, \Contao\Config::get('cloudconvertApiKey'));
-$objConversion->sendToBrowser(true)->createUncached(true)->convert();
+
+$objConversion = new \Markocupic\CloudconvertBundle\Services\DocxToPdfConversion($destFilename, Config::get('cloudconvertApiKey'));
+$objConversion->sendToBrowser(true)->createUncached(false)->convert();
