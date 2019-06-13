@@ -25,7 +25,7 @@
   "require": {
     "php": ">=7.1",
     "contao/core-bundle": "^4.5",
-    "cloudconvert/cloudconvert-php": ">=2.2.0.0,<2.3-dev",
+    "cloudconvert/cloudconvert-php": "^2.2.1",
   },
   "autoload": {
     "psr-4": {
