@@ -23,9 +23,9 @@
     "source": "https://github.com/markocupic/cloudconvert-bundle"
   },
   "require": {
-    "php": ">=7.1",
+    "php": "^7.1|^8.0",
     "contao/core-bundle": "^4.5",
-    "cloudconvert/cloudconvert-php": "^2.2.1"
+    "cloudconvert/cloudconvert-php": "^3.2"
   },
   "autoload": {
     "psr-4": {
