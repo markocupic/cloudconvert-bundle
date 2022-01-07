@@ -1,142 +1,113 @@
 <?php
-/**
- * Cloudconvert helper classes
- * Copyright (c) 2008-2019 Marko Cupic
- * @package cloudconvert-bundle
- * @author Marko Cupic m.cupic@gmx.ch, 2019
- * @link https://github.com/markocupic/cloudconvert-bundle
- */
 
 declare(strict_types=1);
 
 namespace Markocupic\CloudconvertBundle\Services;
 
-use CloudConvert\Api;
-use CloudConvert\Exceptions\ApiBadRequestException;
-use CloudConvert\Exceptions\ApiConversionFailedException;
-use CloudConvert\Exceptions\ApiTemporaryUnavailableException;
+use CloudConvert\CloudConvert;
+use CloudConvert\Models\Job;
+use CloudConvert\Models\Task;
+use Contao\Controller;
+use Contao\Environment;
 use Contao\Folder;
 use Contao\File;
 use Contao\System;
 use Symfony\Component\Filesystem\Exception\FileNotFoundException;
 
-/**
- * Class DocxToPdfConversion
- * @package Markocupic\CloudconvertBundle\Services
- */
 class DocxToPdfConversion
 {
 
-    /**
-     * @var
-     */
     protected $apiKey;
+    protected File $objDocxSrc;
+    protected bool $sendToBrowser = false;
+    protected bool $createUncached = false;
 
     /**
-     * @var
+     * @throws \Exception
      */
-    protected $docxSrc;
-
-    /**
-     * @var bool
-     */
-    protected $sendToBrowser = false;
-
-    /**
-     * @var bool
-     */
-    protected $createUncached = false;
-
-    /**
-     * DocxToPdfConversion constructor.
-     * @param string $docxSrc
-     * @param string $apiKey
-     */
-    public function __construct(string $docxSrc, string $apiKey)
+    public function __construct(string $docxSrcPath, string $apiKey)
     {
-        $rootDir = System::getContainer()->getParameter('kernel.project_dir');
+        $projectDir = System::getContainer()->getParameter('kernel.project_dir');
 
-        if (!file_exists($rootDir . '/' . $docxSrc))
-        {
-            throw new FileNotFoundException(sprintf('Docx file "%s" not found. Conversion aborted.', $docxSrc));
+        if (!file_exists($projectDir.'/'.$docxSrcPath)) {
+            throw new FileNotFoundException(sprintf('Docx file "%s" not found. Conversion aborted.', $docxSrcPath));
         }
 
-        $this->docxSrc = $docxSrc;
+        $this->objDocxSrc = new File($docxSrcPath);
         $this->apiKey = $apiKey;
     }
 
-    /**
-     * @param bool $blnSendToBrowser
-     * @return static
-     */
-    public function sendToBrowser($blnSendToBrowser = false)
+
+    public function sendToBrowser(bool $blnSendToBrowser = false): self
     {
         $this->sendToBrowser = $blnSendToBrowser;
+
         return $this;
     }
 
-    /**
-     * @param bool $blnUncached
-     * @return static
-     */
-    public function createUncached($blnUncached = false)
+
+    public function createUncached(bool $blnUncached = false): self
     {
         $this->createUncached = $blnUncached;
+
         return $this;
     }
 
     /**
-     *
+     * @throws \Exception
      */
     public function convert(): void
     {
-        // Get root dir
-        $rootDir = System::getContainer()->getParameter('kernel.project_dir');
-
-        $pathParts = pathinfo($this->docxSrc);
-        $tmpDir = $pathParts['dirname'];
-        $filename = $pathParts['filename'];
-        $pdfSRC = $tmpDir . '/' . $filename . '.pdf';
+        $projectDir = System::getContainer()->getParameter('kernel.project_dir');
+        $pdfSrc = dirname($this->objDocxSrc->path).'/'.$this->objDocxSrc->filename.'.pdf';
 
         // Convert docx file to pdf if it can not bee found in the cache
-        if (!is_file($rootDir . '/' . $pdfSRC) || $this->createUncached === true)
-        {
+        if (!is_file($projectDir.'/'.$pdfSrc) || $this->createUncached === true) {
             // Be sure the folder exists
-            new Folder($tmpDir);
+            new Folder(dirname($pdfSrc));
 
-            $api = new Api($this->apiKey);
-            try
-            {
-                // https://cloudconvert.com/api/console
-                $api->convert([
-                    'inputformat'  => 'docx',
-                    'outputformat' => 'pdf',
-                    'input'        => 'upload',
-                    'file'         => fopen($rootDir . '/' . $this->docxSrc, 'r'),
-                ])->wait()->download($rootDir . '/' . $pdfSRC);
-            } // Exception handling
-            catch (ApiBadRequestException $e)
-            {
-                echo "Something with your request is wrong: " . $e->getMessage();
-            } catch (ApiConversionFailedException $e)
-            {
-                echo "Conversion failed, maybe because of a broken input file: " . $e->getMessage();
-            } catch (ApiTemporaryUnavailableException $e)
-            {
-                echo "API temporary unavailable: " . $e->getMessage() . "\n";
-                echo "We should retry the conversion in " . $e->retryAfter . " seconds";
-            } catch (\Exception $e)
-            {
-                // Network problems, etc..
-                echo "Something else went wrong: " . $e->getMessage() . "\n";
+            $cloudconvert = new CloudConvert([
+                'api_key' => $this->apiKey,
+                'sandbox' => false,
+            ]);
+
+            $job = (new Job())
+                ->setTag('docx2Pdf-Job')
+                ->addTask(
+                    (new Task('import/raw', 'importDocx-File'))
+                        ->set('file', file_get_contents($projectDir.'/'.$this->objDocxSrc))
+                        ->set('filename', $this->objDocxSrc->basename)
+                )
+                ->addTask(
+                    (new Task('convert', 'docx2Pdf-Task'))
+                        ->set('input', 'importDocx-File')
+                        ->set('output_format', 'pdf')
+                )
+                ->addTask(
+                    (new Task('export/url', 'exportPdf-File'))
+                        ->set('input', 'docx2Pdf-Task')
+                )
+            ;
+
+            $cloudconvert->jobs()->create($job);
+            $cloudconvert->jobs()->wait($job); // Wait for job completion
+
+            $file = $job->getExportUrls()[0];
+            $source = $cloudconvert->getHttpTransport()->download($file->url)->detach();
+
+            if (file_exists($projectDir.'/'.$pdfSrc)) {
+                unlink($projectDir.'/'.$pdfSrc);
             }
+
+            $dest = fopen($projectDir.'/'.$pdfSrc, 'w');
+            stream_copy_to_stream($source, $dest);
         }
 
-        if ($this->sendToBrowser)
-        {
+        if ($this->sendToBrowser) {
+
             // Send converted file to the browser
             sleep(1);
-            $objPdf = new File($pdfSRC);
+            $objPdf = new File($pdfSrc);
             $objPdf->sendToBrowser();
         }
     }
