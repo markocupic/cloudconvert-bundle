@@ -19,11 +19,13 @@ markocupic_cloudconvert:
 ```php
 $source = 'files/mswordfile.docx';
 
-(new \Markocupic\CloudconvertBundle\Services\DocxToPdfConversion($source))
-  ->sendToBrowser(true)
-  ->createUncached(false)
-  ->convert()
-;
+// Generate pdf
+$this->fileConverter
+    ->file($source)
+    ->uncached(false)
+    ->sendToBrowser(true)
+    ->convertTo('pdf')
+    ;
 
 // Version 2.x.x uses the Cloudconvert version 2 api.
 ```

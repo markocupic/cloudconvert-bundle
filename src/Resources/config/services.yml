@@ -1,1 +1,12 @@
 services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        bind:
+            $projectDir: '%kernel.project_dir%'
+            $apiKey: '%markocupic_cloudconvert.api_key%'
+
+    Markocupic\CloudconvertBundle\:
+        resource: ../../
+        exclude: ../../{DependencyInjection,Resources}
+

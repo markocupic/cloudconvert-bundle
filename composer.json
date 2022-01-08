@@ -3,7 +3,7 @@
   "description": "Cloudconvert helper classes",
   "keywords": [
     "docx",
-    "pdf",
+    "file",
     "converter",
     "contao",
     "cloudconvert"
@@ -23,17 +23,14 @@
     "source": "https://github.com/markocupic/cloudconvert-bundle"
   },
   "require": {
-    "php": "^7.1|^8.0",
-    "contao/core-bundle": "^4.5",
+    "php": "^7.4|^8.0",
+    "contao/core-bundle": "^4.12",
     "cloudconvert/cloudconvert-php": "^3.2"
   },
   "autoload": {
     "psr-4": {
       "Markocupic\\CloudconvertBundle\\": "src/"
-    },
-    "classmap": [
-      "src/Services"
-    ]
+    }
   },
   "extra": {
     "contao-manager-plugin": "Markocupic\\CloudconvertBundle\\ContaoManager\\Plugin"
