@@ -2,22 +2,29 @@
 
 declare(strict_types=1);
 
+/*
+ * This file is part of Cloudconvert Bundle.
+ *
+ * (c) Marko Cupic 2022 <m.cupic@gmx.ch>
+ * @license GPL-3.0-or-later
+ * For the full copyright and license information,
+ * please view the LICENSE file that was distributed with this source code.
+ * @link https://github.com/markocupic/cloudconvert-bundle
+ */
+
 namespace Markocupic\CloudconvertBundle\Services;
 
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
-use Contao\Controller;
-use Contao\Environment;
-use Contao\Folder;
 use Contao\File;
+use Contao\Folder;
 use Contao\System;
 use Symfony\Component\Filesystem\Exception\FileNotFoundException;
 
 class DocxToPdfConversion
 {
-
-    protected $apiKey;
+    protected string $apiKey;
     protected File $objDocxSrc;
     protected bool $sendToBrowser = false;
     protected bool $createUncached = false;
@@ -25,7 +32,7 @@ class DocxToPdfConversion
     /**
      * @throws \Exception
      */
-    public function __construct(string $docxSrcPath, string $apiKey)
+    public function __construct(string $docxSrcPath, ?string $apiKeyCustom)
     {
         $projectDir = System::getContainer()->getParameter('kernel.project_dir');
 
@@ -34,9 +41,8 @@ class DocxToPdfConversion
         }
 
         $this->objDocxSrc = new File($docxSrcPath);
-        $this->apiKey = $apiKey;
+        $this->apiKey = !empty($apiKeyCustom) ? $apiKeyCustom : System::getContainer()->getParameter('markocupic_cloudconvert.api_key');
     }
-
 
     public function sendToBrowser(bool $blnSendToBrowser = false): self
     {
@@ -44,7 +50,6 @@ class DocxToPdfConversion
 
         return $this;
     }
-
 
     public function createUncached(bool $blnUncached = false): self
     {
@@ -59,12 +64,12 @@ class DocxToPdfConversion
     public function convert(): void
     {
         $projectDir = System::getContainer()->getParameter('kernel.project_dir');
-        $pdfSrc = dirname($this->objDocxSrc->path).'/'.$this->objDocxSrc->filename.'.pdf';
+        $pdfSrc = \dirname($this->objDocxSrc->path).'/'.$this->objDocxSrc->filename.'.pdf';
 
         // Convert docx file to pdf if it can not bee found in the cache
-        if (!is_file($projectDir.'/'.$pdfSrc) || $this->createUncached === true) {
+        if (!is_file($projectDir.'/'.$pdfSrc) || true === $this->createUncached) {
             // Be sure the folder exists
-            new Folder(dirname($pdfSrc));
+            new Folder(\dirname($pdfSrc));
 
             $cloudconvert = new CloudConvert([
                 'api_key' => $this->apiKey,
@@ -74,8 +79,8 @@ class DocxToPdfConversion
             $job = (new Job())
                 ->setTag('docx2Pdf-Job')
                 ->addTask(
-                    (new Task('import/raw', 'importDocx-File'))
-                        ->set('file', file_get_contents($projectDir.'/'.$this->objDocxSrc))
+                    (new Task('import/base64', 'importDocx-File'))
+                        ->set('file', base64_encode(file_get_contents($projectDir.'/'.$this->objDocxSrc->path)))
                         ->set('filename', $this->objDocxSrc->basename)
                 )
                 ->addTask(
@@ -104,7 +109,6 @@ class DocxToPdfConversion
         }
 
         if ($this->sendToBrowser) {
-
             // Send converted file to the browser
             sleep(1);
             $objPdf = new File($pdfSrc);
