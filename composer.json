@@ -1,14 +1,13 @@
 {
   "name": "markocupic/cloudconvert-bundle",
-  "description": "Cloudconvert helper classes",
+  "description": "This Contao CMS bundle provides a wrapper for the cloudconvert api.",
   "keywords": [
-    "docx",
     "file",
     "converter",
     "contao",
     "cloudconvert"
   ],
-  "type": "contao-module",
+  "type": "contao-bundle",
   "license": "LGPL-3.0+",
   "authors": [
     {
