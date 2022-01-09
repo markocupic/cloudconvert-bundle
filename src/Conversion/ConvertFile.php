@@ -27,8 +27,9 @@ class ConvertFile
     private ?File $file = null;
     private ?string $format = null;
     private bool $sendToBrowser = false;
-    private bool $uncached = false;
+    private bool $uncached = true;
     private ?string $targetPath = null;
+    private array $options = [];
 
     public function __construct(string $projectDir, string $apiKey)
     {
@@ -36,6 +37,11 @@ class ConvertFile
         $this->apiKey = $apiKey;
     }
 
+    /**
+     * @throws \Exception
+     *
+     * @return $this
+     */
     public function file(File $file): self
     {
         $this->file = $file;
@@ -83,17 +89,46 @@ class ConvertFile
         return $objConvertedFile;
     }
 
+    public function getApiKey(): string
+    {
+        return $this->apiKey;
+    }
+
+    public function setApiKey(string $apiKey): void
+    {
+        $this->apiKey = $apiKey;
+    }
+
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+
+    public function setOption(string $key, $varValue): self
+    {
+        $this->options[$key] = $varValue;
+
+        return $this;
+    }
+
+    public function removeOption(string $key): void
+    {
+        if (isset($this->options[$key])) {
+            unset($this->options[$key]);
+        }
+    }
+
     /**
      * @throws \Exception
      */
     protected function convert(): File
     {
-        if (null === ($targetPath = $this->getTargetPath())) {
+        if (null === $this->getTargetPath()) {
             $targetPath = \dirname($this->file->path).'/'.$this->file->filename.'.'.$this->format;
             $this->setTargetPath($targetPath);
         }
 
-        // Convert file to the target format if it can not be found in the cache
+        // Convert file to the target format if it can not be found in the cache.
         if (!is_file($this->projectDir.'/'.$this->getTargetPath()) || $this->uncached) {
             $cloudconvert = new CloudConvert([
                 'api_key' => $this->apiKey,
@@ -108,9 +143,7 @@ class ConvertFile
                         ->set('filename', $this->file->basename)
                 )
                 ->addTask(
-                    (new Task('convert', 'conversionTask'))
-                        ->set('input', 'importFileTask')
-                        ->set('output_format', $this->format)
+                    $this->getConversionTask()
                 )
                 ->addTask(
                     (new Task('export/url', 'exportTask'))
@@ -121,8 +154,13 @@ class ConvertFile
             $cloudconvert->jobs()->create($job);
             $cloudconvert->jobs()->wait($job); // Wait for job completion
 
-            $file = $job->getExportUrls()[0];
-            $source = $cloudconvert->getHttpTransport()->download($file->url)->detach();
+            $file = $job->getExportUrls();
+
+            if (null === $file || !\is_array($file) || null === $file[0]) {
+                throw new \Exception('File conversion failed.');
+            }
+
+            $source = $cloudconvert->getHttpTransport()->download($file[0]->url)->detach();
 
             if (file_exists($this->projectDir.'/'.$this->getTargetPath())) {
                 unlink($this->projectDir.'/'.$this->getTargetPath());
@@ -135,19 +173,27 @@ class ConvertFile
         return new File($this->getTargetPath());
     }
 
-    public function getApiKey(): string
-    {
-        return $this->apiKey;
-    }
-
-    public function setApiKey(string $apiKey): void
-    {
-        $this->apiKey = $apiKey;
-    }
-
     protected function getTargetPath(): ?string
     {
         return $this->targetPath;
+    }
+
+    protected function getConversionTask(): Task
+    {
+        $task = (new Task('convert', 'conversionTask'))
+            ->set('input', 'importFileTask')
+            ->set('output_format', $this->format)
+        ;
+
+        $options = $this->getOptions();
+
+        if (!empty($options)) {
+            foreach ($options as $key => $value) {
+                $task->set($key, $value);
+            }
+        }
+
+        return $task;
     }
 
     /**
