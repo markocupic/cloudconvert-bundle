@@ -24,6 +24,9 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use Contao\File;
+use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
+
 class DemoController
 {
 
@@ -34,7 +37,7 @@ class DemoController
     }
 
     public function demo(){
-        $source = 'files/mswordfile.docx';
+        $source = new File('files/mswordfile.docx');
 
         // Basic example:
         // Convert from docx to pdf (minimal configuration)
@@ -44,7 +47,8 @@ class DemoController
             ;
 
         // A slightly more sophisticated example:
-        // Convert from docx to jpg, send file to the browser and some more options
+        // Convert from docx to jpg, send file to the browser
+        // and set some more options
         $this->fileConverter
             ->reset()
             ->file($source)

@@ -54,8 +54,6 @@ class ConvertFile
 
     /**
      * @throws \Exception
-     *
-     * @return $this
      */
     public function file(File $file): self
     {
