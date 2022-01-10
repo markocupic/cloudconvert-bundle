@@ -19,9 +19,11 @@ use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
 use Contao\File;
 use Contao\Folder;
+use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 
 class ConvertFile
 {
+    private ContaoLogger $contaoLogger;
     private string $projectDir;
     private string $apiKey;
     private ?File $file = null;
@@ -31,10 +33,23 @@ class ConvertFile
     private ?string $targetPath = null;
     private array $options = [];
 
-    public function __construct(string $projectDir, string $apiKey)
+    public function __construct(ContaoLogger $contaoLogger, string $projectDir, string $apiKey)
     {
+        $this->contaoLogger = $contaoLogger;
         $this->projectDir = $projectDir;
         $this->apiKey = $apiKey;
+    }
+
+    public function reset(): self
+    {
+        $this->file = null;
+        $this->format = null;
+        $this->sendToBrowser = false;
+        $this->uncached = true;
+        $this->targetPath = null;
+        $this->clearOptions();
+
+        return $this;
     }
 
     /**
@@ -44,6 +59,8 @@ class ConvertFile
      */
     public function file(File $file): self
     {
+        $this->reset();
+
         $this->file = $file;
 
         if (!is_file($this->projectDir.'/'.$file->path)) {
@@ -81,8 +98,6 @@ class ConvertFile
         $objConvertedFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            // Send converted file to the browser
-            sleep(1);
             $objConvertedFile->sendToBrowser();
         }
 
@@ -111,11 +126,20 @@ class ConvertFile
         return $this;
     }
 
-    public function removeOption(string $key): void
+    public function removeOption(string $key): self
     {
         if (isset($this->options[$key])) {
             unset($this->options[$key]);
         }
+
+        return $this;
+    }
+
+    public function clearOptions(): self
+    {
+        $this->options = [];
+
+        return $this;
     }
 
     /**
@@ -156,7 +180,7 @@ class ConvertFile
 
             $file = $job->getExportUrls();
 
-            if (null === $file || !\is_array($file) || null === $file[0]) {
+            if (!\is_array($file) || null === $file[0]) {
                 throw new \Exception('File conversion failed.');
             }
 
@@ -166,8 +190,19 @@ class ConvertFile
                 unlink($this->projectDir.'/'.$this->getTargetPath());
             }
 
+            // Save file to the target directory
             $dest = fopen($this->projectDir.'/'.$this->getTargetPath(), 'w');
             stream_copy_to_stream($source, $dest);
+
+            // Contao log
+            $this->contaoLogger->log(
+                sprintf(
+                    'Successfully converted "%s" to "%s" using the cloudconvert api.',
+                    $this->file->path,
+                    $this->getTargetPath()
+                ),
+                __METHOD__,
+            );
         }
 
         return new File($this->getTargetPath());
