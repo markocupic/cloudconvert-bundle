@@ -19,37 +19,54 @@ markocupic_cloudconvert:
 ## Usage
 ```php
 <?php
+// src/Controller/CloudconvertDemoController.php
 
 declare(strict_types=1);
 
 namespace App\Controller;
 
+use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\File;
 use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
 
-class DemoController
+/**
+ * @Route("/cloudconvert_demo", name=CloudconvertDemoController::class, defaults={"_scope" = "frontend"})
+ */
+class CloudconvertDemoController extends AbstractController
 {
 
-    protected ConvertFile $convertFile;
+    private ContaoFramework $framework;
+    private ConvertFile $convertFile;
 
-    public function __construct(ConvertFile $convertFile){
+    public function __construct(ContaoFramework $framework, ConvertFile $convertFile)
+    {
+        $this->framework = $framework;
         $this->convertFile = $convertFile;
     }
 
-    public function demo(){
+    /**
+     * @throws \Exception
+     */
+    public function __invoke(): Response
+    {
+
+        $this->framework->initialize(true);
+
         $source = new File('files/mswordfile.docx');
 
         // Basic example:
         // Convert from docx to pdf (minimal configuration)
-        $this->fileConverter
+        $this->convertFile
             ->file($source)
-            ->convertTo('pdf')
-            ;
+            ->convertTo('pdf');
 
         // A slightly more sophisticated example:
         // Convert from docx to jpg, send file to the browser
         // and set some more options
-        $this->fileConverter
+        $this->convertFile
             ->reset()
             ->file($source)
             ->uncached(false)
@@ -60,8 +77,9 @@ class DemoController
             ->setOption('quality', 90)
             // For a full list of the supported formats
             // please visit https://cloudconvert.com/api/v2/convert#convert-formats
-            ->convertTo('jpg', 'files/images/my.jpg')
-            ;
+            ->convertTo('jpg', 'files/images/my.jpg');
+
+        return new Response('Successfully run two conversion tasks.');
     }
 }
 
