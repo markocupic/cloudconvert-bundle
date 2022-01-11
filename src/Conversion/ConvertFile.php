@@ -17,34 +17,38 @@ namespace Markocupic\CloudconvertBundle\Conversion;
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
-use Contao\File;
-use Contao\Folder;
+use Contao\CoreBundle\Exception\ResponseException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
+use Patchwork\Utf8;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Symfony\Component\Mime\MimeTypes;
 
 class ConvertFile
 {
     private ContaoLogger $contaoLogger;
-    private string $projectDir;
     private string $apiKey;
-    private ?File $file = null;
+    private ?string $source = null;
     private ?string $format = null;
     private bool $sendToBrowser = false;
+    private bool $sendToBrowserInline = false;
+
     private bool $uncached = true;
     private ?string $targetPath = null;
     private array $options = [];
 
-    public function __construct(ContaoLogger $contaoLogger, string $projectDir, string $apiKey)
+    public function __construct(ContaoLogger $contaoLogger, string $apiKey)
     {
         $this->contaoLogger = $contaoLogger;
-        $this->projectDir = $projectDir;
         $this->apiKey = $apiKey;
     }
 
     public function reset(): self
     {
-        $this->file = null;
+        $this->source = null;
         $this->format = null;
         $this->sendToBrowser = false;
+        $this->sendToBrowserInline = false;
         $this->uncached = true;
         $this->targetPath = null;
         $this->clearOptions();
@@ -55,29 +59,29 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    public function file(File $file): self
+    public function file(string $source): self
     {
         $this->reset();
 
-        $this->file = $file;
-
-        if (!is_file($this->projectDir.'/'.$file->path)) {
-            throw new \Exception('Could not find file '.$this->projectDir.'/'.$file->path.'.');
+        if (!is_file($source)) {
+            throw new \Exception('Could not find source file at "'.$source.'".');
         }
+        $this->source = $source;
 
         return $this;
     }
 
-    public function sendToBrowser(bool $blnSendToBrowser = false): self
+    public function sendToBrowser(bool $sendToBrowser = false, bool $inline = false): self
     {
-        $this->sendToBrowser = $blnSendToBrowser;
+        $this->sendToBrowser = $sendToBrowser;
+        $this->sendToBrowserInline = $inline;
 
         return $this;
     }
 
-    public function uncached(bool $blnUncached = false): self
+    public function uncached(bool $uncached = false): self
     {
-        $this->uncached = $blnUncached;
+        $this->uncached = $uncached;
 
         return $this;
     }
@@ -85,7 +89,7 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    public function convertTo(string $format, string $targetPath = null): File
+    public function convertTo(string $format, string $targetPath = null): string
     {
         $this->format = strtolower($format);
 
@@ -93,13 +97,13 @@ class ConvertFile
             $this->setTargetPath($targetPath);
         }
 
-        $objConvertedFile = $this->convert();
+        $pathConvertedFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            $objConvertedFile->sendToBrowser();
+            $this->sendFileToBrowser($pathConvertedFile, '', $this->sendToBrowserInline);
         }
 
-        return $objConvertedFile;
+        return $pathConvertedFile;
     }
 
     public function getApiKey(): string
@@ -143,15 +147,20 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    protected function convert(): File
+    protected function convert(): string
     {
         if (null === $this->getTargetPath()) {
-            $targetPath = \dirname($this->file->path).'/'.$this->file->filename.'.'.$this->format;
+            $targetPath = sprintf(
+                '%s/%s.%s',
+                \dirname($this->source),
+                pathinfo($this->source, PATHINFO_FILENAME),
+                $this->format,
+            );
             $this->setTargetPath($targetPath);
         }
 
         // Convert file to the target format if it can not be found in the cache.
-        if (!is_file($this->projectDir.'/'.$this->getTargetPath()) || $this->uncached) {
+        if (!is_file($this->getTargetPath()) || $this->uncached) {
             $cloudconvert = new CloudConvert([
                 'api_key' => $this->apiKey,
                 'sandbox' => false,
@@ -161,8 +170,8 @@ class ConvertFile
                 ->setTag('conversionJob')
                 ->addTask(
                     (new Task('import/base64', 'importFileTask'))
-                        ->set('file', base64_encode(file_get_contents($this->projectDir.'/'.$this->file->path)))
-                        ->set('filename', $this->file->basename)
+                        ->set('file', base64_encode(file_get_contents($this->source)))
+                        ->set('filename', basename($this->source))
                 )
                 ->addTask(
                     $this->getConversionTask()
@@ -184,26 +193,26 @@ class ConvertFile
 
             $source = $cloudconvert->getHttpTransport()->download($file[0]->url)->detach();
 
-            if (file_exists($this->projectDir.'/'.$this->getTargetPath())) {
-                unlink($this->projectDir.'/'.$this->getTargetPath());
+            if (file_exists($this->getTargetPath())) {
+                unlink($this->getTargetPath());
             }
 
             // Save file to the target directory
-            $dest = fopen($this->projectDir.'/'.$this->getTargetPath(), 'w');
+            $dest = fopen($this->getTargetPath(), 'w');
             stream_copy_to_stream($source, $dest);
 
             // Contao log
             $this->contaoLogger->log(
                 sprintf(
                     'Successfully converted "%s" to "%s" using the cloudconvert api.',
-                    $this->file->path,
+                    $this->source,
                     $this->getTargetPath()
                 ),
                 __METHOD__,
             );
         }
 
-        return new File($this->getTargetPath());
+        return $this->getTargetPath();
     }
 
     protected function getTargetPath(): ?string
@@ -235,12 +244,36 @@ class ConvertFile
     protected function setTargetPath(string $targetPath): void
     {
         // Create the folder if it doesn't exist
-        new Folder(\dirname($targetPath));
+        if (!is_dir(\dirname($targetPath))) {
+            mkdir(\dirname($targetPath), 0775, true);
+        }
 
-        if (!is_dir($this->projectDir.'/'.\dirname($targetPath))) {
-            throw new \Exception(sprintf('Unable to create target folder "%s"', $this->projectDir.'/'.\dirname($targetPath)));
+        if (!is_dir(\dirname($targetPath))) {
+            throw new \Exception(sprintf('Unable to create target folder "%s"', \dirname($targetPath)));
         }
 
         $this->targetPath = $targetPath;
+    }
+
+    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
+    {
+        $response = new BinaryFileResponse($filePath);
+        $response->setPrivate(); // public by default
+        $response->setAutoEtag();
+
+        $response->setContentDisposition(
+            $inline ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+            $filename,
+            Utf8::toAscii(basename($filePath))
+        );
+
+        $mimeTypes = new MimeTypes();
+        $mimeType = $mimeTypes->guessMimeType($filePath);
+
+        $response->headers->addCacheControlDirective('must-revalidate');
+        $response->headers->set('Connection', 'close');
+        $response->headers->set('Content-Type', $mimeType);
+
+        throw new ResponseException($response);
     }
 }

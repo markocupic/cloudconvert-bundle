@@ -26,7 +26,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use Contao\CoreBundle\Framework\ContaoFramework;
-use Contao\File;
+use Contao\System;
 use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -54,21 +54,23 @@ class CloudconvertDemoController extends AbstractController
     {
 
         $this->framework->initialize(true);
+        $projectDir = System::getContainer()->getParameter('kernel.project_dir');
 
-        $source = new File('files/mswordfile.docx');
+        $sourcePath = $projectDir.'/files/mswordfile.docx';
 
         // Basic example:
         // Convert from docx to pdf (minimal configuration)
         $this->convertFile
-            ->file($source)
-            ->convertTo('pdf');
+            ->file($sourcePath)
+            ->convertTo('pdf')
+        ;
 
         // A slightly more sophisticated example:
         // Convert from docx to jpg, send file to the browser
         // and set some more options
         $this->convertFile
             ->reset()
-            ->file($source)
+            ->file($sourcePath)
             ->uncached(false)
             ->sendToBrowser(true)
             // For a full list of possible options
@@ -77,11 +79,13 @@ class CloudconvertDemoController extends AbstractController
             ->setOption('quality', 90)
             // For a full list of the supported formats
             // please visit https://cloudconvert.com/api/v2/convert#convert-formats
-            ->convertTo('jpg', 'files/images/my.jpg');
+            ->convertTo('jpg', 'files/images/my.jpg')
+        ;
 
         return new Response('Successfully run two conversion tasks.');
     }
 }
+
 
 ```
 
