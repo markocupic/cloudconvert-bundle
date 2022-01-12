@@ -31,7 +31,7 @@ markocupic_cloudconvert:
   sandbox_api_key: '****' # optional
 ```
 
-To complete the installation please run in your command line `composer install`.
+To complete the installation please run `composer install` in your command line.
 
 ## Usage
 ```php
