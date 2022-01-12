@@ -13,12 +13,14 @@ Get your free api key for using the Cloudconvert PHP API: [Free Plan Cloudconver
 # config/config.yml
 
 markocupic_cloudconvert:
-  api_key: '****'
+  api_key: '****' # mandatory
+  sandbox_api_key: '****' # optional
 ```
 
 ## Usage
 ```php
 <?php
+
 // src/Controller/CloudconvertDemoController.php
 
 declare(strict_types=1);
@@ -58,34 +60,36 @@ class CloudconvertDemoController extends AbstractController
 
         $sourcePath = $projectDir.'/files/mswordfile.docx';
 
-        // Basic example:
-        // Convert from docx to pdf (minimal configuration)
+        // Basic example (minimal configuration):
+        // Convert from docx to pdf
         $this->convertFile
             ->file($sourcePath)
+            // Save converted file in the same
+            // directory like the source file.
             ->convertTo('pdf')
         ;
 
         // A slightly more sophisticated example:
-        // Convert from docx to jpg, send file to the browser
-        // and set some more options
         $this->convertFile
             ->reset()
             ->file($sourcePath)
-            ->uncached(false)
+            // Sandbox API key has to be set in config/config.yml
+            ->sandbox(true)
+            ->uncached(true)
             ->sendToBrowser(true, true)
             // For a full list of possible options
             // please visit https://cloudconvert.com/api/v2/convert#convert-tasks
             ->setOption('width', 1200)
             ->setOption('quality', 90)
-            // For a full list of the supported formats
+            // Convert docx file into the png format and
+            // save file in a different directory.
+            // For a full list of supported formats
             // please visit https://cloudconvert.com/api/v2/convert#convert-formats
-            ->convertTo('jpg', 'files/images/my.jpg')
-        ;
+            ->convertTo('png', 'files/images/my.png');
 
         return new Response('Successfully run two conversion tasks.');
     }
 }
-
 
 ```
 

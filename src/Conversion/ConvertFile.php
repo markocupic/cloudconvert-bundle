@@ -26,21 +26,28 @@ use Symfony\Component\Mime\MimeTypes;
 
 class ConvertFile
 {
+    private const CONVERSION_JOB_NAME = 'conversionJob';
+    private const IMPORT_FILE_TASK_NAME = 'importFileTask';
+    private const CONVERSION_TASK_NAME = 'conversionTask';
+    private const EXPORT_TASK_NAME = 'exportFileTask';
+
     private ContaoLogger $contaoLogger;
     private string $apiKey;
+    private string $sandboxApiKey;
     private ?string $source = null;
     private ?string $format = null;
     private bool $sendToBrowser = false;
     private bool $sendToBrowserInline = false;
-
     private bool $uncached = true;
+    private bool $sandbox = false;
     private ?string $targetPath = null;
     private array $options = [];
 
-    public function __construct(ContaoLogger $contaoLogger, string $apiKey)
+    public function __construct(ContaoLogger $contaoLogger, string $cloudconvertApiKey, string $cloudconvertSandboxApiKey = '')
     {
         $this->contaoLogger = $contaoLogger;
-        $this->apiKey = $apiKey;
+        $this->apiKey = $cloudconvertApiKey;
+        $this->sandboxApiKey = $cloudconvertSandboxApiKey;
     }
 
     public function reset(): self
@@ -50,6 +57,7 @@ class ConvertFile
         $this->sendToBrowser = false;
         $this->sendToBrowserInline = false;
         $this->uncached = true;
+        $this->sandbox = false;
         $this->targetPath = null;
         $this->clearOptions();
 
@@ -86,6 +94,13 @@ class ConvertFile
     public function uncached(bool $uncached = false): self
     {
         $this->uncached = $uncached;
+
+        return $this;
+    }
+
+    public function sandbox(bool $sandbox = false): self
+    {
+        $this->sandbox = $sandbox;
 
         return $this;
     }
@@ -173,12 +188,12 @@ class ConvertFile
         // Convert file to the target format if it can not be found in the cache.
         if (!is_file($this->getTargetPath()) || $this->uncached) {
             $cloudconvert = new CloudConvert([
-                'api_key' => $this->apiKey,
-                'sandbox' => false,
+                'api_key' => $this->sandbox ? $this->sandboxApiKey : $this->apiKey,
+                'sandbox' => $this->sandbox,
             ]);
 
             $job = (new Job())
-                ->setTag('conversionJob')
+                ->setTag(self::CONVERSION_JOB_NAME)
                 ->addTask(
                     $this->getImportTask()
                 )
@@ -191,7 +206,19 @@ class ConvertFile
             ;
 
             $cloudconvert->jobs()->create($job);
-            $cloudconvert->jobs()->wait($job); // Wait for job completion
+
+            // Get upload task
+            $uploadTask = $job->getTasks()
+                ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
+            ;
+
+            // Upload file to the cloudconvert server
+            $cloudconvert->tasks()
+                ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
+            ;
+
+            // Wait for job completion
+            $cloudconvert->jobs()->wait($job);
 
             $file = $job->getExportUrls();
 
@@ -205,6 +232,7 @@ class ConvertFile
                 ->detach()
             ;
 
+            // Delete old file
             if (file_exists($this->getTargetPath())) {
                 unlink($this->getTargetPath());
             }
@@ -234,16 +262,13 @@ class ConvertFile
 
     protected function getImportTask(): Task
     {
-        return (new Task('import/base64', 'importFileTask'))
-            ->set('file', base64_encode(file_get_contents($this->source)))
-            ->set('filename', basename($this->source))
-        ;
+        return new Task('import/upload', self::IMPORT_FILE_TASK_NAME);
     }
 
     protected function getConversionTask(): Task
     {
-        $task = (new Task('convert', 'conversionTask'))
-            ->set('input', 'importFileTask')
+        $task = (new Task('convert', self::CONVERSION_TASK_NAME))
+            ->set('input', self::IMPORT_FILE_TASK_NAME)
             ->set('output_format', $this->format)
         ;
 
@@ -260,8 +285,8 @@ class ConvertFile
 
     protected function getExportTask(): Task
     {
-        return (new Task('export/url', 'exportTask'))
-            ->set('input', 'conversionTask')
+        return (new Task('export/url', self::EXPORT_TASK_NAME))
+            ->set('input', self::CONVERSION_TASK_NAME)
         ;
     }
 
