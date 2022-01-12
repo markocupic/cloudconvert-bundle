@@ -16,7 +16,7 @@ Almost everything is possible:
 ## Free plan
 Get your free api key for using the Cloudconvert PHP API: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
 
-## Installation Configuration
+## Installation & configuration
 Install the extension via the Contao Manager or use composer and the console: `composer require markocupic/cloudconvert-bundle`
 
 In your `config/config.yml` you now have to set the api key and then run.
