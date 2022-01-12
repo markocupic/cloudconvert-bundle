@@ -72,7 +72,7 @@ class CloudconvertDemoController extends AbstractController
             ->reset()
             ->file($sourcePath)
             ->uncached(false)
-            ->sendToBrowser(true)
+            ->sendToBrowser(true, true)
             // For a full list of possible options
             // please visit https://cloudconvert.com/api/v2/convert#convert-tasks
             ->setOption('width', 1200)

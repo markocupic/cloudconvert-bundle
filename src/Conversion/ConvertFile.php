@@ -61,14 +61,18 @@ class ConvertFile
      */
     public function file(string $source): self
     {
-        $this->reset();
-
         if (!is_file($source)) {
             throw new \Exception('Could not find source file at "'.$source.'".');
         }
+
         $this->source = $source;
 
         return $this;
+    }
+
+    public function getSource(): ?string
+    {
+        return $this->source;
     }
 
     public function sendToBrowser(bool $sendToBrowser = false, bool $inline = false): self
@@ -91,19 +95,26 @@ class ConvertFile
      */
     public function convertTo(string $format, string $targetPath = null): string
     {
-        $this->format = strtolower($format);
+        if (!is_file($this->source)) {
+            throw new \Exception('Could not find source file at "'.$this->source.'".');
+        }
+
+        $this->format = strtolower(ltrim($format, '.'));
 
         if ($targetPath) {
             $this->setTargetPath($targetPath);
         }
 
-        $pathConvertedFile = $this->convert();
+        // Start conversion process
+        $pathConvFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            $this->sendFileToBrowser($pathConvertedFile, '', $this->sendToBrowserInline);
+            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
         }
 
-        return $pathConvertedFile;
+        $this->reset();
+
+        return $pathConvFile;
     }
 
     public function getApiKey(): string
@@ -169,16 +180,13 @@ class ConvertFile
             $job = (new Job())
                 ->setTag('conversionJob')
                 ->addTask(
-                    (new Task('import/base64', 'importFileTask'))
-                        ->set('file', base64_encode(file_get_contents($this->source)))
-                        ->set('filename', basename($this->source))
+                    $this->getImportTask()
                 )
                 ->addTask(
                     $this->getConversionTask()
                 )
                 ->addTask(
-                    (new Task('export/url', 'exportTask'))
-                        ->set('input', 'conversionTask')
+                    $this->getExportTask()
                 )
             ;
 
@@ -191,7 +199,11 @@ class ConvertFile
                 throw new \Exception('File conversion failed.');
             }
 
-            $source = $cloudconvert->getHttpTransport()->download($file[0]->url)->detach();
+            $source = $cloudconvert
+                ->getHttpTransport()
+                ->download($file[0]->url)
+                ->detach()
+            ;
 
             if (file_exists($this->getTargetPath())) {
                 unlink($this->getTargetPath());
@@ -220,6 +232,14 @@ class ConvertFile
         return $this->targetPath;
     }
 
+    protected function getImportTask(): Task
+    {
+        return (new Task('import/base64', 'importFileTask'))
+            ->set('file', base64_encode(file_get_contents($this->source)))
+            ->set('filename', basename($this->source))
+        ;
+    }
+
     protected function getConversionTask(): Task
     {
         $task = (new Task('convert', 'conversionTask'))
@@ -236,6 +256,13 @@ class ConvertFile
         }
 
         return $task;
+    }
+
+    protected function getExportTask(): Task
+    {
+        return (new Task('export/url', 'exportTask'))
+            ->set('input', 'conversionTask')
+        ;
     }
 
     /**
