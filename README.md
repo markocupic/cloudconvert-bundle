@@ -3,7 +3,7 @@
 </p>
 
 # Cloudconvert Bundle
-This simple bundle for the Contao CMS provides a wrapper to convert files from one format into another using the [Cloudconvert API](https://cloudconvert.com/api/v2).
+This simple bundle for the Contao CMS provides a OOP PHP wrapper for converting files from one format into another using the [Cloudconvert API](https://cloudconvert.com/api/v2).
 <p><a href="https://cloudconvert.com/"><img src="docs/images/logo_cloudconvert.png" width="200"></a></p>
 
 Get your free api key for using the Cloudconvert PHP API: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)

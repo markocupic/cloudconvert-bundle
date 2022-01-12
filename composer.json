@@ -1,6 +1,6 @@
 {
   "name": "markocupic/cloudconvert-bundle",
-  "description": "This Contao CMS bundle provides a wrapper for the cloudconvert api.",
+  "description": "This Bundle for the Contao CMS provides a OOP PHP wrapper for CloudConvert's API. Convert files from one filetype into an other with ease.",
   "keywords": [
     "file",
     "converter",
