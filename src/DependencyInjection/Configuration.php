@@ -26,11 +26,10 @@ class Configuration implements ConfigurationInterface
         $treeBuilder->getRootNode()
             ->children()
                 ->scalarNode('api_key')
-                ->cannotBeEmpty()
+                ->defaultValue('***')
                 ->end()
-
                 ->scalarNode('sandbox_api_key')
-                ->defaultValue('')
+                ->defaultValue('***')
                 ->end()
             ->end()
         ;
