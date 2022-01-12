@@ -6,16 +6,28 @@
 This simple bundle for the Contao CMS provides a OOP PHP wrapper for converting files from one format into another using the [Cloudconvert API](https://cloudconvert.com/api/v2).
 <p><a href="https://cloudconvert.com/"><img src="docs/images/logo_cloudconvert.png" width="200"></a></p>
 
+Almost everything is possible:
+- docx -> pdf
+- jpeg -> png
+- wav -> mp3
+- csv -> xlsx
+- etc. For a full list of formats visit [Cloudconvert](https://cloudconvert.com/).
+
+## Free plan
 Get your free api key for using the Cloudconvert PHP API: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
 
-## Configuration
+## Installation Configuration
+Install the extension via the Contao Manager or use composer and the console: `composer require markocupic/cloudconvert-bundle`
+
+In your `config/config.yml` you now have to set the api key and then run.
 ```yaml
 # config/config.yml
-
 markocupic_cloudconvert:
   api_key: '****' # mandatory
   sandbox_api_key: '****' # optional
 ```
+
+To complete the installation run `composer install`.
 
 ## Usage
 ```php
@@ -69,6 +81,19 @@ class CloudconvertDemoController extends AbstractController
             ->convertTo('pdf')
         ;
 
+        $sourcePath = $projectDir.'/files/samplesound.wav';
+
+        // Convert from wav to mp3 and send file
+        // to the browser.
+        $this->convertFile
+            ->reset()
+            ->file($sourcePath)
+            ->sendToBrowser(true, true)
+            ->convertTo('mp3')
+        ;
+
+        $sourcePath = $projectDir.'/files/image.jpg';
+
         // A slightly more sophisticated example:
         $this->convertFile
             ->reset()
@@ -85,11 +110,13 @@ class CloudconvertDemoController extends AbstractController
             // save file in a different directory.
             // For a full list of supported formats
             // please visit https://cloudconvert.com/api/v2/convert#convert-formats
-            ->convertTo('png', 'files/images/my.png');
+            ->convertTo('png', 'files/images/mynewimage.png')
+        ;
 
         return new Response('Successfully run two conversion tasks.');
     }
 }
+
 
 ```
 
