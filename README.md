@@ -1,9 +1,10 @@
-<p align="center">
+<p align="left">
 <a href="https://github.com/markocupic"><img src="https://github.com/markocupic/markocupic/blob/main/logo.png?raw=true" width="200"></a>
 </p>
 
 # Cloudconvert Bundle
-This simple bundle for the Contao CMS provides a OOP PHP wrapper for converting files from one format into another using the [Cloudconvert API](https://cloudconvert.com/api/v2).
+This simple bundle for the **Contao CMS** provides an OOP PHP wrapper for
+  converting files from one format into another using the [Cloudconvert API](https://cloudconvert.com/api/v2).
 <p><a href="https://cloudconvert.com/"><img src="docs/images/logo_cloudconvert.png" width="200"></a></p>
 
 Almost everything is possible:
@@ -14,12 +15,15 @@ Almost everything is possible:
 - etc. For a full list of formats visit [Cloudconvert](https://cloudconvert.com/).
 
 ## Free plan
-Get your free api key for using the Cloudconvert PHP API: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
+Get your **free API key** for using
+  the **Cloudconvert API**: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
 
 ## Installation & configuration
-Install the extension via the Contao Manager or use composer and the console: `composer require markocupic/cloudconvert-bundle`
+Install the extension via the **Contao Manager** or
+  call `composer require markocupic/cloudconvert-bundle` in your **command line**.
 
-In your `config/config.yml` you now have to set the api key and then run.
+In your `config/config.yml` you now have to set the **api key**.
+
 ```yaml
 # config/config.yml
 markocupic_cloudconvert:
@@ -27,7 +31,7 @@ markocupic_cloudconvert:
   sandbox_api_key: '****' # optional
 ```
 
-To complete the installation run `composer install`.
+To complete the installation please run in your command line `composer install`.
 
 ## Usage
 ```php
