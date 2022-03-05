@@ -23,15 +23,11 @@
   },
   "require": {
     "php": "^7.4|^8.0",
-    "contao/core-bundle": "^4.12",
+    "contao/core-bundle": "^4.13",
     "cloudconvert/cloudconvert-php": "^3.2"
   },
   "require-dev": {
-    "contao/easy-coding-standard": "^4.0",
-    "contao/manager-plugin": "^2.3.1",
-    "contao/test-case": "^4.6",
-    "phpunit/phpunit": "^9.3",
-    "symfony/phpunit-bridge": "^5.4"
+    "contao/easy-coding-standard": "^4.0"
   },
   "autoload": {
     "psr-4": {

@@ -19,10 +19,10 @@ use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
 use Contao\CoreBundle\Exception\ResponseException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
-use Patchwork\Utf8;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Mime\MimeTypes;
+use Symfony\Component\String\UnicodeString;
 
 class ConvertFile
 {
@@ -316,7 +316,7 @@ class ConvertFile
         $response->setContentDisposition(
             $inline ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
             $filename,
-            Utf8::toAscii(basename($filePath))
+            (new UnicodeString(basename($filePath)))->ascii()->toString()
         );
 
         $mimeTypes = new MimeTypes();
