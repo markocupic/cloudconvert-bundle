@@ -5,7 +5,7 @@ declare(strict_types=1);
 /*
  * This file is part of Cloudconvert Bundle.
  *
- * (c) Marko Cupic 2022 <m.cupic@gmx.ch>
+ * (c) Marko Cupic 2023 <m.cupic@gmx.ch>
  * @license GPL-3.0-or-later
  * For the full copyright and license information,
  * please view the LICENSE file that was distributed with this source code.
@@ -17,9 +17,9 @@ namespace Markocupic\CloudconvertBundle\Conversion;
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
-use Contao\CoreBundle\Exception\ResponseException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\String\UnicodeString;
@@ -34,13 +34,13 @@ class ConvertFile
     private ContaoLogger $contaoLogger;
     private string $apiKey;
     private string $sandboxApiKey;
-    private ?string $source = null;
-    private ?string $format = null;
+    private string|null $source = null;
+    private string|null $format = null;
     private bool $sendToBrowser = false;
     private bool $sendToBrowserInline = false;
     private bool $uncached = true;
     private bool $sandbox = false;
-    private ?string $targetPath = null;
+    private string|null $targetPath = null;
     private array $options = [];
 
     public function __construct(ContaoLogger $contaoLogger, string $cloudconvertApiKey, string $cloudconvertSandboxApiKey = '')
@@ -78,7 +78,7 @@ class ConvertFile
         return $this;
     }
 
-    public function getSource(): ?string
+    public function getSource(): string|null
     {
         return $this->source;
     }
@@ -108,7 +108,7 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    public function convertTo(string $format, string $targetPath = null): string
+    public function convertTo(string $format, string $targetPath = null): Response|string
     {
         if (!is_file($this->source)) {
             throw new \Exception('Could not find source file at "'.$this->source.'".');
@@ -124,7 +124,7 @@ class ConvertFile
         $pathConvFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
+            return $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
         }
 
         $this->reset();
@@ -255,7 +255,7 @@ class ConvertFile
         return $this->getTargetPath();
     }
 
-    protected function getTargetPath(): ?string
+    protected function getTargetPath(): string|null
     {
         return $this->targetPath;
     }
@@ -307,7 +307,7 @@ class ConvertFile
         $this->targetPath = $targetPath;
     }
 
-    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
+    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): Response
     {
         $response = new BinaryFileResponse($filePath);
         $response->setPrivate(); // public by default
@@ -326,6 +326,6 @@ class ConvertFile
         $response->headers->set('Connection', 'close');
         $response->headers->set('Content-Type', $mimeType);
 
-        throw new ResponseException($response);
+        $response->send();
     }
 }

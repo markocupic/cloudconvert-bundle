@@ -22,7 +22,7 @@
     "source": "https://github.com/markocupic/cloudconvert-bundle"
   },
   "require": {
-    "php": "^7.4|^8.0",
+    "php": "^7.4 || ^8.0",
     "contao/core-bundle": "^4.13",
     "cloudconvert/cloudconvert-php": "^3.2"
   },
