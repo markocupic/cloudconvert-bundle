@@ -17,9 +17,9 @@ namespace Markocupic\CloudconvertBundle\Conversion;
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
+use Contao\CoreBundle\Exception\ResponseException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\String\UnicodeString;
@@ -108,7 +108,7 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    public function convertTo(string $format, string $targetPath = null): Response|string
+    public function convertTo(string $format, string $targetPath = null): string
     {
         if (!is_file($this->source)) {
             throw new \Exception('Could not find source file at "'.$this->source.'".');
@@ -124,7 +124,7 @@ class ConvertFile
         $pathConvFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            return $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
+            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
         }
 
         $this->reset();
@@ -307,7 +307,7 @@ class ConvertFile
         $this->targetPath = $targetPath;
     }
 
-    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): Response
+    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
     {
         $response = new BinaryFileResponse($filePath);
         $response->setPrivate(); // public by default
@@ -326,6 +326,6 @@ class ConvertFile
         $response->headers->set('Connection', 'close');
         $response->headers->set('Content-Type', $mimeType);
 
-        $response->send();
+        throw new ResponseException($response->send());
     }
 }
