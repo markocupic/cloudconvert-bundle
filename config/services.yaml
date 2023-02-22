@@ -7,6 +7,6 @@ services:
             $cloudconvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
 
     Markocupic\CloudconvertBundle\:
-        resource: ../../
-        exclude: ../../{DependencyInjection,Resources}
+        resource: ../src/
+        exclude: ../src/{DependencyInjection}
 
