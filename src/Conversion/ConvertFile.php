@@ -18,20 +18,22 @@ use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
 use Contao\CoreBundle\Exception\ResponseException;
+use Contao\User;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Mime\MimeTypes;
+use Symfony\Component\Security\Core\Security;
 use Symfony\Component\String\UnicodeString;
 
-class ConvertFile
+final class ConvertFile
 {
     private const CONVERSION_JOB_NAME = 'conversionJob';
     private const IMPORT_FILE_TASK_NAME = 'importFileTask';
     private const CONVERSION_TASK_NAME = 'conversionTask';
     private const EXPORT_TASK_NAME = 'exportFileTask';
 
-    private ContaoLogger $contaoLogger;
     private string $apiKey;
     private string $sandboxApiKey;
     private string|null $source = null;
@@ -43,11 +45,15 @@ class ConvertFile
     private string|null $targetPath = null;
     private array $options = [];
 
-    public function __construct(ContaoLogger $contaoLogger, string $cloudconvertApiKey, string $cloudconvertSandboxApiKey = '')
-    {
-        $this->contaoLogger = $contaoLogger;
-        $this->apiKey = $cloudconvertApiKey;
-        $this->sandboxApiKey = $cloudconvertSandboxApiKey;
+    public function __construct(
+        private readonly RequestStack $requestStack,
+        private readonly ContaoLogger $contaoLogger,
+        string $cloudConvertApiKey,
+        string $cloudConvertSandboxApiKey = '',
+        private readonly Security|null $security = null,
+    ) {
+        $this->apiKey = $cloudConvertApiKey;
+        $this->sandboxApiKey = $cloudConvertSandboxApiKey;
     }
 
     public function reset(): self
@@ -173,7 +179,7 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    protected function convert(): string
+    private function convert(): string
     {
         if (null === $this->getTargetPath()) {
             $targetPath = sprintf(
@@ -187,7 +193,7 @@ class ConvertFile
 
         // Convert file to the target format if it can not be found in the cache.
         if (!is_file($this->getTargetPath()) || $this->uncached) {
-            $cloudconvert = new CloudConvert([
+            $cloudConvert = new CloudConvert([
                 'api_key' => $this->sandbox ? $this->sandboxApiKey : $this->apiKey,
                 'sandbox' => $this->sandbox,
             ]);
@@ -205,20 +211,20 @@ class ConvertFile
                 )
             ;
 
-            $cloudconvert->jobs()->create($job);
+            $cloudConvert->jobs()->create($job);
 
             // Get upload task
             $uploadTask = $job->getTasks()
                 ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
             ;
 
-            // Upload file to the cloudconvert server
-            $cloudconvert->tasks()
+            // Upload file to the CloudConvert server
+            $cloudConvert->tasks()
                 ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
             ;
 
             // Wait for job completion
-            $cloudconvert->jobs()->wait($job);
+            $cloudConvert->jobs()->wait($job);
 
             $file = $job->getExportUrls();
 
@@ -226,7 +232,7 @@ class ConvertFile
                 throw new \Exception('File conversion failed.');
             }
 
-            $source = $cloudconvert
+            $source = $cloudConvert
                 ->getHttpTransport()
                 ->download($file[0]->url)
                 ->detach()
@@ -242,11 +248,32 @@ class ConvertFile
             stream_copy_to_stream($source, $dest);
 
             // Contao log
+            $username = 'ANONYMOUS';
+
+            if ($this->security) {
+                $user = $this->security->getUser();
+
+                if ($user instanceof User) {
+                    $username = $user->getUserIdentifier();
+                }
+            }
+
+            $scope = 'TEST';
+            $request = $this->requestStack->getCurrentRequest();
+
+            if ($request) {
+                if ($request->attributes->has('_scope')) {
+                    $scope = strtoupper($request->attributes->get('_scope'));
+                }
+            }
+
             $this->contaoLogger->log(
                 sprintf(
-                    'Successfully converted "%s" to "%s" using the cloudconvert api.',
-                    $this->source,
-                    $this->getTargetPath()
+                    'User "%s" (Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
+                    $username,
+                    $scope,
+                    basename($this->source),
+                    basename($this->getTargetPath()),
                 ),
                 __METHOD__,
             );
@@ -255,17 +282,17 @@ class ConvertFile
         return $this->getTargetPath();
     }
 
-    protected function getTargetPath(): string|null
+    private function getTargetPath(): string|null
     {
         return $this->targetPath;
     }
 
-    protected function getImportTask(): Task
+    private function getImportTask(): Task
     {
         return new Task('import/upload', self::IMPORT_FILE_TASK_NAME);
     }
 
-    protected function getConversionTask(): Task
+    private function getConversionTask(): Task
     {
         $task = (new Task('convert', self::CONVERSION_TASK_NAME))
             ->set('input', self::IMPORT_FILE_TASK_NAME)
@@ -283,7 +310,7 @@ class ConvertFile
         return $task;
     }
 
-    protected function getExportTask(): Task
+    private function getExportTask(): Task
     {
         return (new Task('export/url', self::EXPORT_TASK_NAME))
             ->set('input', self::CONVERSION_TASK_NAME)
@@ -293,7 +320,7 @@ class ConvertFile
     /**
      * @throws \Exception
      */
-    protected function setTargetPath(string $targetPath): void
+    private function setTargetPath(string $targetPath): void
     {
         // Create the folder if it doesn't exist
         if (!is_dir(\dirname($targetPath))) {
@@ -307,7 +334,7 @@ class ConvertFile
         $this->targetPath = $targetPath;
     }
 
-    protected function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
+    private function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
     {
         $response = new BinaryFileResponse($filePath);
         $response->setPrivate(); // public by default

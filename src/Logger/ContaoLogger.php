@@ -18,25 +18,21 @@ use Contao\CoreBundle\Monolog\ContaoContext;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
-class ContaoLogger
+final readonly class ContaoLogger
 {
-    private LoggerInterface|null $logger;
-
-    public function __construct(LoggerInterface $logger = null)
-    {
-        $this->logger = $logger;
+    public function __construct(
+        private LoggerInterface|null $logger,
+    ) {
     }
 
     public function log(string $strText, string $strMethod, string $strLogLevel = LogLevel::INFO, string $strContaoLogLevel = ContaoContext::GENERAL): void
     {
-        if (null !== $this->logger) {
-            $this->logger->log(
-                $strLogLevel,
-                $strText,
-                [
-                    'contao' => new ContaoContext($strMethod, $strContaoLogLevel),
-                ]
-            );
-        }
+        $this->logger?->log(
+            $strLogLevel,
+            $strText,
+            [
+                'contao' => new ContaoContext($strMethod, $strContaoLogLevel),
+            ]
+        );
     }
 }

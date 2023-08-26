@@ -3,8 +3,8 @@ services:
         autowire: true
         autoconfigure: true
         bind:
-            $cloudconvertApiKey: '%markocupic_cloudconvert.api_key%'
-            $cloudconvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
+            $cloudConvertApiKey: '%markocupic_cloudconvert.api_key%'
+            $cloudConvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
 
     Markocupic\CloudconvertBundle\:
         resource: ../src/

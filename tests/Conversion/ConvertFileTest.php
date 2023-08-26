@@ -15,32 +15,36 @@ declare(strict_types=1);
 namespace Markocupic\CloudconvertBundle\Tests\Conversion;
 
 use Contao\TestCase\ContaoTestCase;
-use Markocupic\CloudconvertBundle\ContaoManager\Plugin;
 use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 class ConvertFileTest extends ContaoTestCase
 {
     private ContainerBuilder $container;
     private ConvertFile $cf;
-    private string $projectDir;
 
     private string $source;
 
     protected function setUp(): void
     {
         $this->container = $this->getContainerWithContaoConfiguration(sys_get_temp_dir());
-        $this->projectDir = $this->container->getParameter('kernel.project_dir');
+        $projectDir = $this->container->getParameter('kernel.project_dir');
         $this->container->setParameter('markocupic_cloudconvert.api_key', 'api_key');
 
         $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
 
+        $request = new Request([], [], [], [], [], [], 'FooBar');
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+
         $logger = new ContaoLogger(null);
 
-        $this->cf = new ConvertFile($logger, $apiKey);
+        $this->cf = new ConvertFile($requestStack, $logger, $apiKey,'', null);
 
-        $this->source = $this->projectDir.'/msword.docx';
+        $this->source = $projectDir.'/msword.docx';
         file_put_contents($this->source, 'foo');
     }
 
@@ -57,9 +61,13 @@ class ConvertFileTest extends ContaoTestCase
     {
         $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
 
+        $request = new Request([], [], [], [], [], [], 'FooBar');
+        $requestStack = new RequestStack();
+        $requestStack->push($request);
+
         $logger = new ContaoLogger(null);
 
-        $this->assertInstanceOf(ConvertFile::class, new ConvertFile($logger, $apiKey));
+        $this->assertInstanceOf(ConvertFile::class, new ConvertFile($requestStack, $logger, $apiKey,'', null));
     }
 
 
