@@ -19,7 +19,11 @@ use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
 use Contao\CoreBundle\Exception\ResponseException;
 use Contao\User;
+use Markocupic\CloudconvertBundle\Exception\ConversionFailedException;
+use Markocupic\CloudconvertBundle\Exception\InvalidTargetDirectoryException;
+use Markocupic\CloudconvertBundle\Exception\SourceNotFoundException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
@@ -42,6 +46,7 @@ final class ConvertFile
     private bool $sendToBrowserInline = false;
     private bool $uncached = true;
     private bool $sandbox = false;
+    private bool $deleteFileAfterSend = false;
     private string|null $targetPath = null;
     private array $options = [];
 
@@ -64,19 +69,17 @@ final class ConvertFile
         $this->sendToBrowserInline = false;
         $this->uncached = true;
         $this->sandbox = false;
+        $this->deleteFileAfterSend = false;
         $this->targetPath = null;
         $this->clearOptions();
 
         return $this;
     }
 
-    /**
-     * @throws \Exception
-     */
-    public function file(string $source): self
+    public function file(string $source = null): self
     {
         if (!is_file($source)) {
-            throw new \Exception('Could not find source file at "'.$source.'".');
+            throw new SourceNotFoundException('Could not find source file at "'.$source.'".');
         }
 
         $this->source = $source;
@@ -89,10 +92,11 @@ final class ConvertFile
         return $this->source;
     }
 
-    public function sendToBrowser(bool $sendToBrowser = false, bool $inline = false): self
+    public function sendToBrowser(bool $sendToBrowser = false, bool $inline = false, bool $deleteFileAfterSend = false): self
     {
         $this->sendToBrowser = $sendToBrowser;
         $this->sendToBrowserInline = $inline;
+        $this->deleteFileAfterSend = $deleteFileAfterSend;
 
         return $this;
     }
@@ -111,13 +115,10 @@ final class ConvertFile
         return $this;
     }
 
-    /**
-     * @throws \Exception
-     */
     public function convertTo(string $format, string $targetPath = null): string
     {
         if (!is_file($this->source)) {
-            throw new \Exception('Could not find source file at "'.$this->source.'".');
+            throw new SourceNotFoundException('Could not find source file at "'.$this->source.'".');
         }
 
         $this->format = strtolower(ltrim($format, '.'));
@@ -130,7 +131,7 @@ final class ConvertFile
         $pathConvFile = $this->convert();
 
         if ($this->sendToBrowser) {
-            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline);
+            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline, $this->deleteFileAfterSend);
         }
 
         $this->reset();
@@ -176,9 +177,6 @@ final class ConvertFile
         return $this;
     }
 
-    /**
-     * @throws \Exception
-     */
     private function convert(): string
     {
         if (null === $this->getTargetPath()) {
@@ -229,7 +227,7 @@ final class ConvertFile
             $file = $job->getExportUrls();
 
             if (!\is_array($file) || null === $file[0]) {
-                throw new \Exception('File conversion failed.');
+                throw new ConversionFailedException(sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
             }
 
             $source = $cloudConvert
@@ -317,24 +315,21 @@ final class ConvertFile
         ;
     }
 
-    /**
-     * @throws \Exception
-     */
     private function setTargetPath(string $targetPath): void
     {
-        // Create the folder if it doesn't exist
-        if (!is_dir(\dirname($targetPath))) {
-            mkdir(\dirname($targetPath), 0775, true);
-        }
+        $fs = new Filesystem();
 
-        if (!is_dir(\dirname($targetPath))) {
-            throw new \Exception(sprintf('Unable to create target folder "%s"', \dirname($targetPath)));
+        // Create the folder if it doesn't exist
+        $fs->mkdir(\dirname($targetPath));
+
+        if (!is_dir(\dirname($targetPath)) || !is_writable(\dirname($targetPath))) {
+            throw new InvalidTargetDirectoryException(sprintf('Could not create the target directory. Or the target directory is not writable at "%s"', \dirname($targetPath)));
         }
 
         $this->targetPath = $targetPath;
     }
 
-    private function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false): void
+    private function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false, bool $deleteFileAfterSend = false): void
     {
         $response = new BinaryFileResponse($filePath);
         $response->setPrivate(); // public by default
@@ -352,7 +347,8 @@ final class ConvertFile
         $response->headers->addCacheControlDirective('must-revalidate');
         $response->headers->set('Connection', 'close');
         $response->headers->set('Content-Type', $mimeType);
+        $response->deleteFileAfterSend($deleteFileAfterSend);
 
-        throw new ResponseException($response->send());
+        throw new ResponseException($response);
     }
 }

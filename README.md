@@ -14,7 +14,7 @@ Almost everything is possible:
 - csv -> xlsx
 - etc. For a full list of formats visit [Cloudconvert](https://cloudconvert.com/).
 
-## Free plan
+## Free plan (25 credits per day)
 Get your **free API key** for using
   the **Cloudconvert API**: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
 
@@ -22,10 +22,10 @@ Get your **free API key** for using
 Install the extension via the **Contao Manager** or
   call `composer require markocupic/cloudconvert-bundle` in your **command line**.
 
-In your `config/config.yml` you now have to set the **api key**.
+In your `config/config.yaml` you now have to set the **api key**.
 
 ```yaml
-# config/config.yml
+# config/config.yaml
 markocupic_cloudconvert:
   api_key: '****' # mandatory
   sandbox_api_key: '****' # optional
@@ -81,7 +81,7 @@ class CloudconvertDemoController extends AbstractController
         $this->convertFile
             ->file($sourcePath)
             // Save converted file in the same
-            // directory like the source file.
+            // directory as the source file.
             ->convertTo('pdf')
         ;
 
@@ -92,7 +92,7 @@ class CloudconvertDemoController extends AbstractController
         $this->convertFile
             ->reset()
             ->file($sourcePath)
-            ->sendToBrowser(true, true)
+            ->sendToBrowser(true, true, true) // download file, inline, delete file after send
             ->convertTo('mp3')
         ;
 
@@ -102,10 +102,10 @@ class CloudconvertDemoController extends AbstractController
         $this->convertFile
             ->reset()
             ->file($sourcePath)
-            // Sandbox API key has to be set in config/config.yml
+            // Sandbox API key has to be set in config/config.yaml
             ->sandbox(true)
             ->uncached(true)
-            ->sendToBrowser(true, true)
+            ->sendToBrowser(true, true, true) // download file, inline, delete file after send
             // For a full list of possible options
             // please visit https://cloudconvert.com/api/v2/convert#convert-tasks
             ->setOption('width', 1200)
@@ -114,7 +114,7 @@ class CloudconvertDemoController extends AbstractController
             // save file in a different directory.
             // For a full list of supported formats
             // please visit https://cloudconvert.com/api/v2/convert#convert-formats
-            ->convertTo('png', 'files/images/mynewimage.png')
+            ->convertTo('png', 'files/images/my_new_image.png')
         ;
 
         return new Response('Successfully run two conversion tasks.');
