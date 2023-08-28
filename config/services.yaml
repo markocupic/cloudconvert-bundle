@@ -5,6 +5,7 @@ services:
         bind:
             $cloudConvertApiKey: '%markocupic_cloudconvert.api_key%'
             $cloudConvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
+            $cloudConvertCacheDir: '%markocupic_cloudconvert.cache_dir%'
 
     Markocupic\CloudconvertBundle\:
         resource: ../src/

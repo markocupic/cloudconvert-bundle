@@ -39,5 +39,6 @@ class MarkocupicCloudconvertExtension extends Extension
         // Configuration
         $container->setParameter('markocupic_cloudconvert.api_key', $config['api_key']);
         $container->setParameter('markocupic_cloudconvert.sandbox_api_key', $config['sandbox_api_key']);
+        $container->setParameter('markocupic_cloudconvert.cache_dir', $config['cache_dir']);
     }
 }

@@ -24,6 +24,7 @@ use Markocupic\CloudconvertBundle\Exception\InvalidTargetDirectoryException;
 use Markocupic\CloudconvertBundle\Exception\SourceNotFoundException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
@@ -48,11 +49,13 @@ final class ConvertFile
     private bool $sandbox = false;
     private bool $deleteFileAfterSend = false;
     private string|null $targetPath = null;
+    private string|null $cacheHashCode = null;
     private array $options = [];
 
     public function __construct(
         private readonly RequestStack $requestStack,
         private readonly ContaoLogger $contaoLogger,
+        private readonly string $cloudConvertCacheDir,
         string $cloudConvertApiKey,
         string $cloudConvertSandboxApiKey = '',
         private readonly Security|null $security = null,
@@ -71,6 +74,7 @@ final class ConvertFile
         $this->sandbox = false;
         $this->deleteFileAfterSend = false;
         $this->targetPath = null;
+        $this->cacheHashCode = null;
         $this->clearOptions();
 
         return $this;
@@ -125,18 +129,48 @@ final class ConvertFile
 
         if ($targetPath) {
             $this->setTargetPath($targetPath);
+        } else {
+            // Write the converted file to the source directory,
+            // if the target path has not been set.
+            if (null === $this->getTargetPath()) {
+                $targetPath = sprintf(
+                    '%s/%s.%s',
+                    \dirname($this->source),
+                    pathinfo($this->source, PATHINFO_FILENAME),
+                    $this->format,
+                );
+                $this->setTargetPath($targetPath);
+            }
         }
 
-        // Start conversion process
-        $pathConvFile = $this->convert();
+        if (!empty($this->cacheHashCode) && !$this->uncached && null !== ($resource = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir))) {
+            // Load resource from cache by hash code
+            $file = $resource;
+
+            $fs = new Filesystem();
+
+            // Copy from cache to target path
+            $fs->copy($resource->getRealPath(), $this->getTargetPath(), true);
+        } elseif (is_file($this->getTargetPath()) && !$this->uncached && empty($this->cacheHashCode)) {
+            // Load resource from target path if cache is enabled and target path is a file resource.
+            $file = new \SplFileObject($this->getTargetPath());
+        } else {
+            //  // Convert file to the target format if it can not be found in the cache.
+            $file = $this->convert();
+        }
+
+        // Store resource
+        if (!empty($this->cacheHashCode) && !$this->uncached) {
+            $this->addToCacheFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir, $file);
+        }
 
         if ($this->sendToBrowser) {
-            $this->sendFileToBrowser($pathConvFile, '', $this->sendToBrowserInline, $this->deleteFileAfterSend);
+            $this->sendFileToBrowser($file->getRealPath(), '', $this->sendToBrowserInline, $this->deleteFileAfterSend);
         }
 
         $this->reset();
 
-        return $pathConvFile;
+        return $file->getRealPath();
     }
 
     public function getApiKey(): string
@@ -177,107 +211,126 @@ final class ConvertFile
         return $this;
     }
 
-    private function convert(): string
+    public function getCacheHashCode(): string|null
     {
-        if (null === $this->getTargetPath()) {
-            $targetPath = sprintf(
-                '%s/%s.%s',
-                \dirname($this->source),
-                pathinfo($this->source, PATHINFO_FILENAME),
-                $this->format,
-            );
-            $this->setTargetPath($targetPath);
+        return $this->cacheHashCode;
+    }
+
+    public function setCacheHashCode(string|null $hashCode): self
+    {
+        $this->cacheHashCode = $hashCode;
+
+        return $this;
+    }
+
+    private function getCachedFromHashCode($cacheHashCode, $format, $cloudConvertCacheDir): \SplFileObject|null
+    {
+        $path = $cloudConvertCacheDir.'/'.$format.'/'.$cacheHashCode;
+        $path = Path::canonicalize($path);
+
+        if (is_file($path)) {
+            return new \SplFileObject($path);
         }
 
-        // Convert file to the target format if it can not be found in the cache.
-        if (!is_file($this->getTargetPath()) || $this->uncached) {
-            $cloudConvert = new CloudConvert([
-                'api_key' => $this->sandbox ? $this->sandboxApiKey : $this->apiKey,
-                'sandbox' => $this->sandbox,
-            ]);
+        return null;
+    }
 
-            $job = (new Job())
-                ->setTag(self::CONVERSION_JOB_NAME)
-                ->addTask(
-                    $this->getImportTask()
-                )
-                ->addTask(
-                    $this->getConversionTask()
-                )
-                ->addTask(
-                    $this->getExportTask()
-                )
+    private function addToCacheFromHashCode(string $cacheHashCode, string $format, string $cloudConvertCacheDir, \SplFileObject $resource): void
+    {
+        $targetPath = Path::canonicalize($cloudConvertCacheDir.'/'.$format.'/'.$cacheHashCode);
+        $fs = new Filesystem();
+        $fs->mkdir(\dirname($targetPath));
+        $fs->copy($resource->getRealPath(), $targetPath, true);
+    }
+
+    private function convert(): \SplFileObject
+    {
+        $cloudConvert = new CloudConvert([
+            'api_key' => $this->sandbox ? $this->sandboxApiKey : $this->apiKey,
+            'sandbox' => $this->sandbox,
+        ]);
+
+        $job = (new Job())
+            ->setTag(self::CONVERSION_JOB_NAME)
+            ->addTask(
+                $this->getImportTask()
+            )
+            ->addTask(
+                $this->getConversionTask()
+            )
+            ->addTask(
+                $this->getExportTask()
+            )
             ;
 
-            $cloudConvert->jobs()->create($job);
+        $cloudConvert->jobs()->create($job);
 
-            // Get upload task
-            $uploadTask = $job->getTasks()
-                ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
+        // Get upload task
+        $uploadTask = $job->getTasks()
+            ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
             ;
 
-            // Upload file to the CloudConvert server
-            $cloudConvert->tasks()
-                ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
+        // Upload file to the CloudConvert server
+        $cloudConvert->tasks()
+            ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
             ;
 
-            // Wait for job completion
-            $cloudConvert->jobs()->wait($job);
+        // Wait for job completion
+        $cloudConvert->jobs()->wait($job);
 
-            $file = $job->getExportUrls();
+        $file = $job->getExportUrls();
 
-            if (!\is_array($file) || null === $file[0]) {
-                throw new ConversionFailedException(sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
-            }
-
-            $source = $cloudConvert
-                ->getHttpTransport()
-                ->download($file[0]->url)
-                ->detach()
-            ;
-
-            // Delete old file
-            if (file_exists($this->getTargetPath())) {
-                unlink($this->getTargetPath());
-            }
-
-            // Save file to the target directory
-            $dest = fopen($this->getTargetPath(), 'w');
-            stream_copy_to_stream($source, $dest);
-
-            // Contao log
-            $username = 'ANONYMOUS';
-
-            if ($this->security) {
-                $user = $this->security->getUser();
-
-                if ($user instanceof User) {
-                    $username = $user->getUserIdentifier();
-                }
-            }
-
-            $scope = 'TEST';
-            $request = $this->requestStack->getCurrentRequest();
-
-            if ($request) {
-                if ($request->attributes->has('_scope')) {
-                    $scope = strtoupper($request->attributes->get('_scope'));
-                }
-            }
-
-            $this->contaoLogger->log(
-                sprintf(
-                    'User "%s" (Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
-                    $username,
-                    $scope,
-                    basename($this->source),
-                    basename($this->getTargetPath()),
-                ),
-                __METHOD__,
-            );
+        if (!\is_array($file) || null === $file[0]) {
+            throw new ConversionFailedException(sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
         }
 
-        return $this->getTargetPath();
+        $source = $cloudConvert
+            ->getHttpTransport()
+            ->download($file[0]->url)
+            ->detach()
+            ;
+
+        // Delete old file
+        if (file_exists($this->getTargetPath())) {
+            unlink($this->getTargetPath());
+        }
+
+        // Save file to the target directory
+        $dest = fopen($this->getTargetPath(), 'w');
+        stream_copy_to_stream($source, $dest);
+
+        // Contao log
+        $username = 'ANONYMOUS';
+
+        if ($this->security) {
+            $user = $this->security->getUser();
+
+            if ($user instanceof User) {
+                $username = $user->getUserIdentifier();
+            }
+        }
+
+        $scope = 'TEST';
+        $request = $this->requestStack->getCurrentRequest();
+
+        if ($request) {
+            if ($request->attributes->has('_scope')) {
+                $scope = strtoupper($request->attributes->get('_scope'));
+            }
+        }
+
+        $this->contaoLogger->log(
+            sprintf(
+                'User "%s" (Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
+                $username,
+                $scope,
+                basename($this->source),
+                basename($this->getTargetPath()),
+            ),
+            __METHOD__,
+        );
+
+        return new \SplFileObject($this->getTargetPath());
     }
 
     private function getTargetPath(): string|null

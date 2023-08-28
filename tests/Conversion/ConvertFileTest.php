@@ -33,7 +33,7 @@ class ConvertFileTest extends ContaoTestCase
         $this->container = $this->getContainerWithContaoConfiguration(sys_get_temp_dir());
         $projectDir = $this->container->getParameter('kernel.project_dir');
         $this->container->setParameter('markocupic_cloudconvert.api_key', 'api_key');
-
+        $cacheDir = sys_get_temp_dir().'/cloudconvert';
         $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
 
         $request = new Request([], [], [], [], [], [], 'FooBar');
@@ -42,7 +42,7 @@ class ConvertFileTest extends ContaoTestCase
 
         $logger = new ContaoLogger(null);
 
-        $this->cf = new ConvertFile($requestStack, $logger, $apiKey,'', null);
+        $this->cf = new ConvertFile($requestStack, $logger, $cacheDir, $apiKey, '', null);
 
         $this->source = $projectDir.'/msword.docx';
         file_put_contents($this->source, 'foo');
@@ -60,6 +60,7 @@ class ConvertFileTest extends ContaoTestCase
     public function testInstantiation(): void
     {
         $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
+        $cacheDir = sys_get_temp_dir().'/cloudconvert';
 
         $request = new Request([], [], [], [], [], [], 'FooBar');
         $requestStack = new RequestStack();
@@ -67,7 +68,7 @@ class ConvertFileTest extends ContaoTestCase
 
         $logger = new ContaoLogger(null);
 
-        $this->assertInstanceOf(ConvertFile::class, new ConvertFile($requestStack, $logger, $apiKey,'', null));
+        $this->assertInstanceOf(ConvertFile::class, new ConvertFile($requestStack, $logger, $cacheDir, $apiKey,'', null));
     }
 
 

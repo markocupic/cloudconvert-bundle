@@ -104,7 +104,8 @@ class CloudconvertDemoController extends AbstractController
             ->file($sourcePath)
             // Sandbox API key has to be set in config/config.yaml
             ->sandbox(true)
-            ->uncached(true)
+            ->uncached(false) // Enable cache
+            ->setCacheHashCode('566TZZUUTTAGHJKUZT') // use the hash of your file to get the file from the cache directory
             ->sendToBrowser(true, true, true) // download file, inline, delete file after send
             // For a full list of possible options
             // please visit https://cloudconvert.com/api/v2/convert#convert-tasks
