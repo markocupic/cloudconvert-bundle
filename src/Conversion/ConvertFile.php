@@ -143,19 +143,20 @@ final class ConvertFile
             }
         }
 
-        if (!empty($this->cacheHashCode) && !$this->uncached && null !== ($resource = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir))) {
-            // Load resource from cache by hash code
-            $file = $resource;
+        // Try to get the file from cache by hashcode
+        $cachedFile = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
 
+        if (null !== $cachedFile) {
+            $file = $cachedFile;
             $fs = new Filesystem();
 
             // Copy from cache to target path
-            $fs->copy($resource->getRealPath(), $this->getTargetPath(), true);
+            $fs->copy($file->getRealPath(), $this->getTargetPath(), true);
         } elseif (is_file($this->getTargetPath()) && !$this->uncached && empty($this->cacheHashCode)) {
             // Load resource from target path if cache is enabled and target path is a file resource.
             $file = new \SplFileObject($this->getTargetPath());
         } else {
-            //  // Convert file to the target format if it can not be found in the cache.
+            // Convert file to the target format if it can not be found in the cache.
             $file = $this->convert();
         }
 
@@ -225,11 +226,25 @@ final class ConvertFile
 
     private function getCachedFromHashCode($cacheHashCode, $format, $cloudConvertCacheDir): \SplFileObject|null
     {
+        if (empty($cacheHashCode)) {
+            return null;
+        }
+
+        if ($this->uncached) {
+            return null;
+        }
+
         $path = $cloudConvertCacheDir.'/'.$format.'/'.$cacheHashCode;
         $path = Path::canonicalize($path);
 
         if (is_file($path)) {
-            return new \SplFileObject($path);
+            $splFile = new \SplFileObject($path);
+
+            if (false === $splFile->getSize() || 0 === $splFile->getSize()) {
+                return null;
+            }
+
+            return $splFile;
         }
 
         return null;
@@ -241,6 +256,7 @@ final class ConvertFile
         $fs = new Filesystem();
         $fs->mkdir(\dirname($targetPath));
         $fs->copy($resource->getRealPath(), $targetPath, true);
+        sleep(1); // Add a timeout! Otherwise, the file may be deleted before it has been copied.
     }
 
     private function convert(): \SplFileObject
