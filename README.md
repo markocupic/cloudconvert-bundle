@@ -34,10 +34,9 @@ markocupic_cloudconvert:
 To complete the installation please run `composer install` in your command line.
 
 ## Usage
+
 ```php
 <?php
-
-// src/Controller/CloudconvertDemoController.php
 
 declare(strict_types=1);
 
@@ -47,38 +46,32 @@ use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\System;
 use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\Routing\Annotation\Route;
 
-/**
- * @Route("/cloudconvert_demo", name=CloudconvertDemoController::class, defaults={"_scope" = "frontend"})
- */
+#[Route('/cloudconvert_demo', name: CloudconvertDemoController::class, defaults: ['_scope' => 'frontend'])]
 class CloudconvertDemoController extends AbstractController
 {
 
-    private ContaoFramework $framework;
-    private ConvertFile $convertFile;
-
-    public function __construct(ContaoFramework $framework, ConvertFile $convertFile)
-    {
-        $this->framework = $framework;
-        $this->convertFile = $convertFile;
-    }
+    public function __construct(
+        private readonly ContaoFramework $framework,
+        private readonly ConvertFile $convertFile,
+    ){}
 
     /**
      * @throws \Exception
      */
-    public function __invoke(): Response
+    public function __invoke(): BinaryFileResponse
     {
 
-        $this->framework->initialize(true);
+        $this->framework->initialize();
         $projectDir = System::getContainer()->getParameter('kernel.project_dir');
 
         $sourcePath = $projectDir.'/files/mswordfile.docx';
 
         // Basic example (minimal configuration):
         // Convert from docx to pdf
-        $this->convertFile
+        $objSplFile = $this->convertFile
             ->file($sourcePath)
             // Save converted file in the same
             // directory as the source file.
@@ -87,26 +80,23 @@ class CloudconvertDemoController extends AbstractController
 
         $sourcePath = $projectDir.'/files/samplesound.wav';
 
-        // Convert from wav to mp3 and send file
-        // to the browser.
-        $this->convertFile
+        // Convert from wav to mp3
+        $objSplFile = $this->convertFile
             ->reset()
             ->file($sourcePath)
-            ->sendToBrowser(true, true, true) // download file, inline, delete file after send
             ->convertTo('mp3')
         ;
 
         $sourcePath = $projectDir.'/files/image.jpg';
 
         // A slightly more sophisticated example:
-        $this->convertFile
+        $objSplFile = $this->convertFile
             ->reset()
             ->file($sourcePath)
             // Sandbox API key has to be set in config/config.yaml
             ->sandbox(true)
             ->uncached(false) // Enable cache
             ->setCacheHashCode('566TZZUUTTAGHJKUZT') // use the hash of your file to get the file from the cache directory
-            ->sendToBrowser(true, true, true) // download file, inline, delete file after send
             // For a full list of possible options
             // please visit https://cloudconvert.com/api/v2/convert#convert-tasks
             ->setOption('width', 1200)
@@ -118,12 +108,10 @@ class CloudconvertDemoController extends AbstractController
             ->convertTo('png', 'files/images/my_new_image.png')
         ;
 
-        return new Response('Successfully run two conversion tasks.');
+        // Send the converted file to the browser
+        return $this->file($objSplFile->getRealPath());
     }
 }
 
 
 ```
-
-Have fun!
-

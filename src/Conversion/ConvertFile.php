@@ -17,21 +17,16 @@ namespace Markocupic\CloudconvertBundle\Conversion;
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\Job;
 use CloudConvert\Models\Task;
-use Contao\CoreBundle\Exception\ResponseException;
 use Contao\User;
 use Markocupic\CloudconvertBundle\Exception\ConversionFailedException;
 use Markocupic\CloudconvertBundle\Exception\CreateFileFromStreamException;
 use Markocupic\CloudconvertBundle\Exception\InvalidTargetDirectoryException;
 use Markocupic\CloudconvertBundle\Exception\SourceNotFoundException;
-use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\HttpFoundation\ResponseHeaderBag;
-use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\Security\Core\Security;
-use Symfony\Component\String\UnicodeString;
 
 final class ConvertFile
 {
@@ -44,20 +39,17 @@ final class ConvertFile
     private string $sandboxApiKey;
     private string|null $source = null;
     private string|null $format = null;
-    private bool $sendToBrowser = false;
-    private bool $sendToBrowserInline = false;
     private bool $uncached = true;
     private bool $sandbox = false;
-    private bool $deleteFileAfterSend = false;
     private string|null $targetPath = null;
     private string|null $cacheHashCode = null;
     private array $options = [];
 
     public function __construct(
         private readonly RequestStack $requestStack,
-        private readonly ContaoLogger $contaoLogger,
         private readonly string $cloudConvertCacheDir,
         string $cloudConvertApiKey,
+        private readonly LoggerInterface|null $contaoGeneralLogger = null,
         string $cloudConvertSandboxApiKey = '',
         private readonly Security|null $security = null,
     ) {
@@ -69,11 +61,8 @@ final class ConvertFile
     {
         $this->source = null;
         $this->format = null;
-        $this->sendToBrowser = false;
-        $this->sendToBrowserInline = false;
         $this->uncached = true;
         $this->sandbox = false;
-        $this->deleteFileAfterSend = false;
         $this->targetPath = null;
         $this->cacheHashCode = null;
         $this->clearOptions();
@@ -83,8 +72,10 @@ final class ConvertFile
 
     public function file(string $source = null): self
     {
-        if (!is_file($source)) {
-            throw new SourceNotFoundException('Could not find source file at "'.$source.'".');
+        $fs = new Filesystem();
+
+        if (!$fs->exists($source)) {
+            throw new SourceNotFoundException('Could not find source file "'.$source.'".');
         }
 
         $this->source = $source;
@@ -95,15 +86,6 @@ final class ConvertFile
     public function getSource(): string|null
     {
         return $this->source;
-    }
-
-    public function sendToBrowser(bool $sendToBrowser = false, bool $inline = false, bool $deleteFileAfterSend = false): self
-    {
-        $this->sendToBrowser = $sendToBrowser;
-        $this->sendToBrowserInline = $inline;
-        $this->deleteFileAfterSend = $deleteFileAfterSend;
-
-        return $this;
     }
 
     public function uncached(bool $uncached = false): self
@@ -120,10 +102,14 @@ final class ConvertFile
         return $this;
     }
 
-    public function convertTo(string $format, string $targetPath = null): string
+    public function convertTo(string $format, string $targetPath = null): \SplFileObject
     {
+        if (empty($this->source)) {
+            throw new SourceNotFoundException('Source not defined. Use the file method to set the path to the source.');
+        }
+
         if (!is_file($this->source)) {
-            throw new SourceNotFoundException('Could not find source file at "'.$this->source.'".');
+            throw new SourceNotFoundException('Could not find source file "'.$this->source.'".');
         }
 
         $this->format = strtolower(ltrim($format, '.'));
@@ -145,15 +131,14 @@ final class ConvertFile
         }
 
         // Try to get the file from cache by hashcode
-        $fromCache = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
+        $cachedFile = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
+        $fs = new Filesystem();
 
-        if (null !== $fromCache) {
-            $file = $fromCache;
-            $fs = new Filesystem();
-
+        if (null !== $cachedFile) {
             // Copy resource from cache to target path
-            $fs->copy($file->getRealPath(), $this->getTargetPath(), true);
-        } elseif (is_file($this->getTargetPath()) && !$this->uncached && empty($this->cacheHashCode)) {
+            $fs->copy($cachedFile->getRealPath(), $this->getTargetPath(), true);
+            $file = new \SplFileObject($this->getTargetPath());
+        } elseif (!$this->uncached && empty($this->cacheHashCode && $fs->exists($this->getTargetPath()))) {
             // Load resource from target path if cache is enabled and target path is a file resource.
             $file = new \SplFileObject($this->getTargetPath());
         } else {
@@ -161,18 +146,14 @@ final class ConvertFile
             $file = $this->convert();
         }
 
-        // Store resource
-        if (null === $fromCache && !empty($this->cacheHashCode) && !$this->uncached) {
+        // Store converted resource to the cache folder
+        if (null === $cachedFile && !empty($this->cacheHashCode) && !$this->uncached) {
             $this->addToCacheFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir, $file);
-        }
-
-        if ($this->sendToBrowser) {
-            $this->sendFileToBrowser($file->getRealPath(), '', $this->sendToBrowserInline, $this->deleteFileAfterSend);
         }
 
         $this->reset();
 
-        return $file->getRealPath();
+        return $file;
     }
 
     public function getApiKey(): string
@@ -348,15 +329,14 @@ final class ConvertFile
             }
         }
 
-        $this->contaoLogger->log(
+        $this->contaoGeneralLogger?->info(
             sprintf(
                 'User "%s" (Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
                 $username,
                 $scope,
                 basename($this->source),
                 basename($this->getTargetPath()),
-            ),
-            __METHOD__,
+            )
         );
 
         return new \SplFileObject($this->getTargetPath());
@@ -399,6 +379,8 @@ final class ConvertFile
 
     private function setTargetPath(string $targetPath): void
     {
+        $targetPath = Path::canonicalize($targetPath);
+
         $fs = new Filesystem();
 
         // Create the folder if it doesn't exist
@@ -409,28 +391,5 @@ final class ConvertFile
         }
 
         $this->targetPath = $targetPath;
-    }
-
-    private function sendFileToBrowser(string $filePath, string $filename = '', bool $inline = false, bool $deleteFileAfterSend = false): void
-    {
-        $response = new BinaryFileResponse($filePath);
-        $response->setPrivate(); // public by default
-        $response->setAutoEtag();
-
-        $response->setContentDisposition(
-            $inline ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
-            $filename,
-            (new UnicodeString(basename($filePath)))->ascii()->toString()
-        );
-
-        $mimeTypes = new MimeTypes();
-        $mimeType = $mimeTypes->guessMimeType($filePath);
-
-        $response->headers->addCacheControlDirective('must-revalidate');
-        $response->headers->set('Connection', 'close');
-        $response->headers->set('Content-Type', $mimeType);
-        $response->deleteFileAfterSend($deleteFileAfterSend);
-
-        throw new ResponseException($response);
     }
 }
