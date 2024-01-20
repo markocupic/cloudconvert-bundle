@@ -20,6 +20,7 @@ use CloudConvert\Models\Task;
 use Contao\CoreBundle\Exception\ResponseException;
 use Contao\User;
 use Markocupic\CloudconvertBundle\Exception\ConversionFailedException;
+use Markocupic\CloudconvertBundle\Exception\CreateFileFromStreamException;
 use Markocupic\CloudconvertBundle\Exception\InvalidTargetDirectoryException;
 use Markocupic\CloudconvertBundle\Exception\SourceNotFoundException;
 use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
@@ -144,13 +145,13 @@ final class ConvertFile
         }
 
         // Try to get the file from cache by hashcode
-        $cachedFile = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
+        $fromCache = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
 
-        if (null !== $cachedFile) {
-            $file = $cachedFile;
+        if (null !== $fromCache) {
+            $file = $fromCache;
             $fs = new Filesystem();
 
-            // Copy from cache to target path
+            // Copy resource from cache to target path
             $fs->copy($file->getRealPath(), $this->getTargetPath(), true);
         } elseif (is_file($this->getTargetPath()) && !$this->uncached && empty($this->cacheHashCode)) {
             // Load resource from target path if cache is enabled and target path is a file resource.
@@ -161,7 +162,7 @@ final class ConvertFile
         }
 
         // Store resource
-        if (!empty($this->cacheHashCode) && !$this->uncached) {
+        if (null === $fromCache && !empty($this->cacheHashCode) && !$this->uncached) {
             $this->addToCacheFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir, $file);
         }
 
@@ -237,26 +238,34 @@ final class ConvertFile
         $path = $cloudConvertCacheDir.'/'.$format.'/'.$cacheHashCode;
         $path = Path::canonicalize($path);
 
-        if (is_file($path)) {
-            $splFile = new \SplFileObject($path);
-
-            if (false === $splFile->getSize() || 0 === $splFile->getSize()) {
-                return null;
-            }
-
-            return $splFile;
+        if (false === is_file($path)) {
+            return null;
         }
 
-        return null;
+        $splFile = new \SplFileObject($path);
+
+        if (false === $splFile->isReadable()) {
+            return null;
+        }
+
+        if (false === $splFile->getSize()) {
+            return null;
+        }
+
+        if (0 === $splFile->getSize()) {
+            return null;
+        }
+
+        return $splFile;
     }
 
     private function addToCacheFromHashCode(string $cacheHashCode, string $format, string $cloudConvertCacheDir, \SplFileObject $resource): void
     {
         $targetPath = Path::canonicalize($cloudConvertCacheDir.'/'.$format.'/'.$cacheHashCode);
+
         $fs = new Filesystem();
         $fs->mkdir(\dirname($targetPath));
         $fs->copy($resource->getRealPath(), $targetPath, true);
-        sleep(1); // Add a timeout! Otherwise, the file may be deleted before it has been copied.
     }
 
     private function convert(): \SplFileObject
@@ -277,19 +286,18 @@ final class ConvertFile
             ->addTask(
                 $this->getExportTask()
             )
-            ;
+        ;
 
         $cloudConvert->jobs()->create($job);
 
         // Get upload task
         $uploadTask = $job->getTasks()
-            ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
-            ;
+            ->whereName(self::IMPORT_FILE_TASK_NAME)[0];
 
         // Upload file to the CloudConvert server
         $cloudConvert->tasks()
             ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
-            ;
+        ;
 
         // Wait for job completion
         $cloudConvert->jobs()->wait($job);
@@ -304,7 +312,7 @@ final class ConvertFile
             ->getHttpTransport()
             ->download($file[0]->url)
             ->detach()
-            ;
+        ;
 
         // Delete old file
         if (file_exists($this->getTargetPath())) {
@@ -313,7 +321,12 @@ final class ConvertFile
 
         // Save file to the target directory
         $dest = fopen($this->getTargetPath(), 'w');
-        stream_copy_to_stream($source, $dest);
+        $bytesCopied = stream_copy_to_stream($source, $dest);
+        fclose($dest);
+
+        if (false === $bytesCopied || 0 === $bytesCopied) {
+            throw new CreateFileFromStreamException(sprintf('Could not create file "%s" from stream.', $this->getTargetPath()));
+        }
 
         // Contao log
         $username = 'ANONYMOUS';
