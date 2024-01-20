@@ -138,7 +138,7 @@ final class ConvertFile
             // Copy resource from cache to target path
             $fs->copy($cachedFile->getRealPath(), $this->getTargetPath(), true);
             $file = new \SplFileObject($this->getTargetPath());
-        } elseif (!$this->uncached && empty($this->cacheHashCode && $fs->exists($this->getTargetPath()))) {
+        } elseif (!$this->uncached && empty($this->cacheHashCode) && $fs->exists($this->getTargetPath())) {
             // Load resource from target path if cache is enabled and target path is a file resource.
             $file = new \SplFileObject($this->getTargetPath());
         } else {
