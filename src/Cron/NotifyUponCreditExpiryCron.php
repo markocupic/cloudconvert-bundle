@@ -25,7 +25,7 @@ use Http\Client\Exception;
 use Psr\Log\LoggerInterface;
 use Twig\Environment;
 
-#[AsCronJob('minutely')]
+#[AsCronJob('daily')]
 class NotifyUponCreditExpiryCron
 {
     public function __construct(
