@@ -40,6 +40,7 @@ class MarkocupicCloudconvertExtension extends Extension
         $container->setParameter('markocupic_cloudconvert.api_key', $config['api_key']);
         $container->setParameter('markocupic_cloudconvert.sandbox_api_key', $config['sandbox_api_key']);
         $container->setParameter('markocupic_cloudconvert.cache_dir', $config['cache_dir']);
+        $container->setParameter('markocupic_cloudconvert.backend_alert_credit_limit', $config['backend_alert_credit_limit']);
         $container->setParameter('markocupic_cloudconvert.credit_expiration_notification', $config['credit_expiration_notification']);
         $container->setParameter('markocupic_cloudconvert.credit_expiration_notification.enabled', $config['credit_expiration_notification']['enabled']);
         $container->setParameter('markocupic_cloudconvert.credit_expiration_notification.limit', $config['credit_expiration_notification']['limit']);

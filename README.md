@@ -27,12 +27,13 @@ In your `config/config.yaml` you now have to set the **api key**.
 ```yaml
 # config/config.yaml
 markocupic_cloudconvert:
-  api_key: '****' # mandatory
-  sandbox_api_key: '****' # optional
-  credit_expiration_notification: # optional
-      enabled: true # optional
-      limit: 150 # optional
-      email: ['foo@bar.ch'] # optional
+  api_key: '****' # is mandatory
+  sandbox_api_key: '****' # is optional
+  backend_alert_credit_limit: 100 # is optional /default to: 200 /set to 0 to disable the system alert
+  credit_expiration_notification: # is optional
+      enabled: true # is optional
+      limit: 150 # is optional
+      email: ['foo@bar.ch', 'bar@foo.ch'] # is optional
 ```
 
 To complete the installation please run `composer install` in your command line.

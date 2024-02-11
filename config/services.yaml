@@ -6,6 +6,9 @@ services:
             $cloudConvertApiKey: '%markocupic_cloudconvert.api_key%'
             $cloudConvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
             $cloudConvertCacheDir: '%markocupic_cloudconvert.cache_dir%'
+            $cloudConvertBackendAlertCreditLimit: '%markocupic_cloudconvert.backend_alert_credit_limit%'
+
+
 
     Markocupic\CloudconvertBundle\:
         resource: ../src/

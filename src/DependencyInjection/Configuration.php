@@ -38,20 +38,21 @@ class Configuration implements ConfigurationInterface
                     ->cannotBeEmpty()
                     ->defaultValue('%kernel.project_dir%'.'/system/tmp/cloudconvert/cache')
                 ->end()
+                ->integerNode('backend_alert_credit_limit')->defaultValue(200)->end()
                 ->arrayNode('credit_expiration_notification')
-                    ->canBeEnabled()
-                    ->addDefaultsIfNotSet()
-                    ->children()
-                        ->booleanNode('enabled')->defaultFalse()->end()
-                        ->integerNode('limit')->defaultValue(0)->end()
-                        ->arrayNode('email')
-                            ->info('Allows you to add one or more email addresses, that will be notified when the user account, that belongs to the api key is running out of credits.')
-                            ->prototype('scalar')->end()
-                            ->defaultValue([])
+                        ->canBeEnabled()
+                        ->addDefaultsIfNotSet()
+                        ->children()
+                            ->booleanNode('enabled')->defaultFalse()->end()
+                            ->integerNode('limit')->defaultValue(0)->end()
+                            ->arrayNode('email')
+                                ->info('Allows you to add one or more email addresses, that will be notified when the user account, that belongs to the api key is running out of credits.')
+                                ->prototype('scalar')->end()
+                                ->defaultValue([])
+                            ->end()
                         ->end()
-                    ->end()
-                ->end() // credit_expiration_notification
-            ->end()
+                    ->end() // credit_expiration_notification
+                ->end()
         ;
 
         return $treeBuilder;
