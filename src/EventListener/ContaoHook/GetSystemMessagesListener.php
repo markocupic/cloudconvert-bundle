@@ -17,7 +17,7 @@ namespace Markocupic\CloudconvertBundle\EventListener\ContaoHook;
 use CloudConvert\CloudConvert;
 use CloudConvert\Exceptions\HttpClientException;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
-use Symfony\Component\Security\Core\Security;
+use Symfony\Bundle\SecurityBundle\Security;
 
 #[AsHook('getSystemMessages')]
 class GetSystemMessagesListener
