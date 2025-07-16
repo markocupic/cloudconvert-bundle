@@ -5,7 +5,7 @@ declare(strict_types=1);
 /*
  * This file is part of Cloudconvert Bundle.
  *
- * (c) Marko Cupic 2024 <m.cupic@gmx.ch>
+ * (c) Marko Cupic <m.cupic@gmx.ch>
  * @license GPL-3.0-or-later
  * For the full copyright and license information,
  * please view the LICENSE file that was distributed with this source code.
@@ -26,32 +26,43 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Security\Core\Security;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 final class ConvertFile
 {
     private const CONVERSION_JOB_NAME = 'conversionJob';
+
     private const IMPORT_FILE_TASK_NAME = 'importFileTask';
+
     private const CONVERSION_TASK_NAME = 'conversionTask';
+
     private const EXPORT_TASK_NAME = 'exportFileTask';
 
     private string $apiKey;
+
     private string $sandboxApiKey;
+
     private string|null $source = null;
+
     private string|null $format = null;
+
     private bool $uncached = true;
+
     private bool $sandbox = false;
+
     private string|null $targetPath = null;
+
     private string|null $cacheHashCode = null;
+
     private array $options = [];
 
     public function __construct(
         private readonly RequestStack $requestStack,
+        private readonly TokenStorageInterface $tokenStorage,
         private readonly string $cloudConvertCacheDir,
         string $cloudConvertApiKey,
-        private readonly LoggerInterface|null $contaoGeneralLogger = null,
         string $cloudConvertSandboxApiKey = '',
-        private readonly Security|null $security = null,
+        private readonly LoggerInterface|null $contaoGeneralLogger = null,
     ) {
         $this->apiKey = $cloudConvertApiKey;
         $this->sandboxApiKey = $cloudConvertSandboxApiKey;
@@ -70,7 +81,7 @@ final class ConvertFile
         return $this;
     }
 
-    public function file(string $source = null): self
+    public function file(string $source): self
     {
         $fs = new Filesystem();
 
@@ -102,7 +113,7 @@ final class ConvertFile
         return $this;
     }
 
-    public function convertTo(string $format, string $targetPath = null): \SplFileObject
+    public function convertTo(string $format, string|null $targetPath = null): \SplFileObject
     {
         if (empty($this->source)) {
             throw new SourceNotFoundException('Source not defined. Use the file method to set the path to the source.');
@@ -117,10 +128,10 @@ final class ConvertFile
         if ($targetPath) {
             $this->setTargetPath($targetPath);
         } else {
-            // Write the converted file to the source directory,
-            // if the target path has not been set.
+            // Write the converted file to the source directory if the target path has not
+            // been set.
             if (null === $this->getTargetPath()) {
-                $targetPath = sprintf(
+                $targetPath = \sprintf(
                     '%s/%s.%s',
                     \dirname($this->source),
                     pathinfo($this->source, PATHINFO_FILENAME),
@@ -139,7 +150,8 @@ final class ConvertFile
             $fs->copy($cachedFile->getRealPath(), $this->getTargetPath(), true);
             $file = new \SplFileObject($this->getTargetPath());
         } elseif (!$this->uncached && empty($this->cacheHashCode) && $fs->exists($this->getTargetPath())) {
-            // Load resource from target path if cache is enabled and target path is a file resource.
+            // Load resource from target path if cache is enabled and target path is a
+            // file resource.
             $file = new \SplFileObject($this->getTargetPath());
         } else {
             // Convert file to the target format if it can not be found in the cache.
@@ -259,13 +271,13 @@ final class ConvertFile
         $job = (new Job())
             ->setTag(self::CONVERSION_JOB_NAME)
             ->addTask(
-                $this->getImportTask()
+                $this->getImportTask(),
             )
             ->addTask(
-                $this->getConversionTask()
+                $this->getConversionTask(),
             )
             ->addTask(
-                $this->getExportTask()
+                $this->getExportTask(),
             )
         ;
 
@@ -273,7 +285,8 @@ final class ConvertFile
 
         // Get upload task
         $uploadTask = $job->getTasks()
-            ->whereName(self::IMPORT_FILE_TASK_NAME)[0];
+            ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
+        ;
 
         // Upload file to the CloudConvert server
         $cloudConvert->tasks()
@@ -286,7 +299,7 @@ final class ConvertFile
         $file = $job->getExportUrls();
 
         if (!\is_array($file) || null === $file[0]) {
-            throw new ConversionFailedException(sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
+            throw new ConversionFailedException(\sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
         }
 
         $source = $cloudConvert
@@ -295,7 +308,7 @@ final class ConvertFile
             ->detach()
         ;
 
-        // Delete old file
+        // Delete the old file
         if (file_exists($this->getTargetPath())) {
             unlink($this->getTargetPath());
         }
@@ -306,21 +319,19 @@ final class ConvertFile
         fclose($dest);
 
         if (false === $bytesCopied || 0 === $bytesCopied) {
-            throw new CreateFileFromStreamException(sprintf('Could not create file "%s" from stream.', $this->getTargetPath()));
+            throw new CreateFileFromStreamException(\sprintf('Could not create file "%s" from stream.', $this->getTargetPath()));
         }
 
         // Contao log
         $username = 'ANONYMOUS';
 
-        if ($this->security) {
-            $user = $this->security->getUser();
-
+        if ($user = $this->tokenStorage->getToken()->getUser()) {
             if ($user instanceof User) {
                 $username = $user->getUserIdentifier();
             }
         }
 
-        $scope = 'TEST';
+        $scope = 'UNDEFINED';
         $request = $this->requestStack->getCurrentRequest();
 
         if ($request) {
@@ -330,13 +341,13 @@ final class ConvertFile
         }
 
         $this->contaoGeneralLogger?->info(
-            sprintf(
-                'User "%s" (Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
+            \sprintf(
+                'User "%s" (Contao-Scope: %s) successfully converted "%s" to "%s" using the CloudConvert API.',
                 $username,
                 $scope,
-                basename($this->source),
-                basename($this->getTargetPath()),
-            )
+                $this->source,
+                $this->getTargetPath(),
+            ),
         );
 
         return new \SplFileObject($this->getTargetPath());
@@ -387,7 +398,7 @@ final class ConvertFile
         $fs->mkdir(\dirname($targetPath));
 
         if (!is_dir(\dirname($targetPath)) || !is_writable(\dirname($targetPath))) {
-            throw new InvalidTargetDirectoryException(sprintf('Could not create the target directory. Or the target directory is not writable at "%s"', \dirname($targetPath)));
+            throw new InvalidTargetDirectoryException(\sprintf('Could not create the target directory. Or the target directory is not writable at "%s"', \dirname($targetPath)));
         }
 
         $this->targetPath = $targetPath;

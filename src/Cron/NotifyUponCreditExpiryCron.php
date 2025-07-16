@@ -5,7 +5,7 @@ declare(strict_types=1);
 /*
  * This file is part of Cloudconvert Bundle.
  *
- * (c) Marko Cupic 2024 <m.cupic@gmx.ch>
+ * (c) Marko Cupic <m.cupic@gmx.ch>
  * @license LGPL-3.0+
  * For the full copyright and license information,
  * please view the LICENSE file that was distributed with this source code.
@@ -48,13 +48,13 @@ class NotifyUponCreditExpiryCron
             $arrRecipientEmail = array_map(
                 function ($email): string {
                     if (!Validator::isEmail($email)) {
-                        $this->contaoErrorLogger->error(sprintf('Invalid email "%s" set for CloudConvert credit expiration notification.', $email));
+                        $this->contaoErrorLogger->error(\sprintf('Invalid email "%s" set for CloudConvert credit expiration notification.', $email));
                         $email = '';
                     }
 
                     return $email;
                 },
-                $arrRecipientEmail
+                $arrRecipientEmail,
             );
 
             $arrRecipientEmail = array_filter(array_unique($arrRecipientEmail));
@@ -69,7 +69,7 @@ class NotifyUponCreditExpiryCron
 
             if ($credits < $limit) {
                 if (!$this->notify($cloudConvUser, $arrRecipientEmail)) {
-                    $this->contaoErrorLogger->error(sprintf('Could not send CloudConvert credit expiration notification to %s.', implode(', ', $arrRecipientEmail)));
+                    $this->contaoErrorLogger->error(\sprintf('Could not send CloudConvert credit expiration notification to %s.', implode(', ', $arrRecipientEmail)));
                 }
             }
         }
@@ -103,13 +103,10 @@ class NotifyUponCreditExpiryCron
 
     private function renderNotification(User $cloudConvUser): string
     {
-        return $this->twig->render(
-            '@MarkocupicCloudconvert/expiry_notification.txt.twig',
-            [
-                'credits' => $cloudConvUser->getCredits(),
-                'username' => $cloudConvUser->getUsername(),
-                'email' => $cloudConvUser->getEmail(),
-            ]
-        );
+        return $this->twig->render('@MarkocupicCloudconvert/expiry_notification.txt.twig', [
+            'credits' => $cloudConvUser->getCredits(),
+            'username' => $cloudConvUser->getUsername(),
+            'email' => $cloudConvUser->getEmail(),
+        ]);
     }
 }

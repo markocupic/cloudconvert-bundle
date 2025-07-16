@@ -5,7 +5,7 @@ declare(strict_types=1);
 /*
  * This file is part of Cloudconvert Bundle.
  *
- * (c) Marko Cupic 2024 <m.cupic@gmx.ch>
+ * (c) Marko Cupic <m.cupic@gmx.ch>
  * @license LGPL-3.0+
  * For the full copyright and license information,
  * please view the LICENSE file that was distributed with this source code.
@@ -36,7 +36,7 @@ class Configuration implements ConfigurationInterface
                 ->end()
                 ->scalarNode('cache_dir')
                     ->cannotBeEmpty()
-                    ->defaultValue('%kernel.project_dir%'.'/system/tmp/cloudconvert/cache')
+                    ->defaultValue('%kernel.project_dir%/system/tmp/cloudconvert/cache')
                 ->end()
                 ->integerNode('backend_alert_credit_limit')->defaultValue(200)->end()
                 ->arrayNode('credit_expiration_notification')
