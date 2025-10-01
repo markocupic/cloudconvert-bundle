@@ -141,20 +141,20 @@ final class ConvertFile
             }
         }
 
-        // Try to get the file from cache by hashcode
+        // Try to get the file from the cache by hashcode
         $cachedFile = $this->getCachedFromHashCode($this->cacheHashCode, $format, $this->cloudConvertCacheDir);
         $fs = new Filesystem();
 
         if (null !== $cachedFile) {
-            // Copy resource from cache to target path
+            // Copy resource from the cache to the target path
             $fs->copy($cachedFile->getRealPath(), $this->getTargetPath(), true);
             $file = new \SplFileObject($this->getTargetPath());
         } elseif (!$this->uncached && empty($this->cacheHashCode) && $fs->exists($this->getTargetPath())) {
-            // Load resource from target path if cache is enabled and target path is a
+            // Load resource from a target path if cache is enabled and the target path is a
             // file resource.
             $file = new \SplFileObject($this->getTargetPath());
         } else {
-            // Convert file to the target format if it can not be found in the cache.
+            // Convert the file to the target format if it cannot be found in the cache.
             $file = $this->convert();
         }
 
@@ -284,21 +284,37 @@ final class ConvertFile
         $cloudConvert->jobs()->create($job);
 
         // Get upload task
-        $uploadTask = $job->getTasks()
-            ->whereName(self::IMPORT_FILE_TASK_NAME)[0]
-        ;
+        $tasks = $job->getTasks()->whereName(self::IMPORT_FILE_TASK_NAME);
 
-        // Upload file to the CloudConvert server
-        $cloudConvert->tasks()
-            ->upload($uploadTask, fopen($this->source, 'r'), basename($this->source))
-        ;
+        if (!isset($tasks[0]) || null === $tasks[0]) {
+            throw new ConversionFailedException(\sprintf('Upload task "%s" not found for file "%s".', self::IMPORT_FILE_TASK_NAME, $this->source));
+        }
+
+        $uploadTask = $tasks[0];
+
+        $sourceHandle = fopen($this->source, 'r');
+
+        try {
+            $cloudConvert->tasks()
+                ->upload($uploadTask, $sourceHandle, basename($this->source))
+            ;
+        } finally {
+            if (\is_resource($sourceHandle) && 'stream' === get_resource_type($sourceHandle)) {
+                fclose($sourceHandle);
+            }
+        }
 
         // Wait for job completion
         $cloudConvert->jobs()->wait($job);
 
+        // Check job status
+        if ('finished' !== $job->getStatus()) {
+            throw new ConversionFailedException(\sprintf('CloudConvert job failed with status "%s" for file "%s".', $job->getStatus(), $this->source));
+        }
+
         $file = $job->getExportUrls();
 
-        if (!\is_array($file) || null === $file[0]) {
+        if (!\is_array($file) || !\is_object($file[0]) || !isset($file[0]->url)) {
             throw new ConversionFailedException(\sprintf('CloudConvert file conversion for "%s" failed.', $this->source));
         }
 
@@ -309,20 +325,32 @@ final class ConvertFile
         ;
 
         // Delete the old file
-        if (file_exists($this->getTargetPath())) {
-            unlink($this->getTargetPath());
+        if (file_exists($this->getTargetPath()) && !unlink($this->getTargetPath())) {
+            throw new ConversionFailedException(\sprintf('Could not delete existing file "%s".', $this->getTargetPath()));
         }
 
         // Save the file to the target directory
         $dest = fopen($this->getTargetPath(), 'w');
-        $bytesCopied = stream_copy_to_stream($source, $dest);
-        fclose($dest);
 
-        if (false === $bytesCopied || 0 === $bytesCopied) {
+        if (false === $dest) {
             throw new CreateFileFromStreamException(\sprintf('Could not create file "%s" from stream.', $this->getTargetPath()));
         }
 
-        // Contao log
+        try {
+            $bytesCopied = stream_copy_to_stream($source, $dest);
+            if (false === $bytesCopied || 0 === $bytesCopied) {
+                throw new CreateFileFromStreamException(\sprintf('Could not create file "%s" from stream.', $this->getTargetPath()));
+            }
+        } finally {
+            if (\is_resource($dest) && 'stream' === get_resource_type($dest)) {
+                fclose($dest);
+            }
+            if (\is_resource($source) && 'stream' === get_resource_type($source)) {
+                fclose($source);
+            }
+        }
+
+        // Add the username to the Contao system log
         $username = 'ANONYMOUS';
 
         if ($user = $this->tokenStorage?->getToken()?->getUser()) {
@@ -331,6 +359,7 @@ final class ConvertFile
             }
         }
 
+        // Add the scope to the Contao system log
         $scope = 'UNDEFINED';
         $request = $this->requestStack->getCurrentRequest();
 
