@@ -313,7 +313,7 @@ final class ConvertFile
             unlink($this->getTargetPath());
         }
 
-        // Save file to the target directory
+        // Save the file to the target directory
         $dest = fopen($this->getTargetPath(), 'w');
         $bytesCopied = stream_copy_to_stream($source, $dest);
         fclose($dest);
@@ -325,7 +325,7 @@ final class ConvertFile
         // Contao log
         $username = 'ANONYMOUS';
 
-        if ($user = $this->tokenStorage->getToken()->getUser()) {
+        if ($user = $this->tokenStorage?->getToken()?->getUser()) {
             if ($user instanceof User) {
                 $username = $user->getUserIdentifier();
             }
