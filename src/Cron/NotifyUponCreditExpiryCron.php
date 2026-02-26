@@ -16,6 +16,7 @@ namespace Markocupic\CloudconvertBundle\Cron;
 
 use CloudConvert\CloudConvert;
 use CloudConvert\Models\User;
+use Contao\Config;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsCronJob;
 use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\Email;
@@ -77,10 +78,11 @@ class NotifyUponCreditExpiryCron
 
     private function notify(User $cloudConvUser, array $arrRecipientEmail): bool
     {
+        $senderEmail = $this->framework->getAdapter(Config::class)->get('adminEmail');
+
         $email = new Email();
-
+        $email->from = $senderEmail;
         $email->subject = 'CloudConvert credits have reached expiration limit';
-
         $email->text = $this->renderNotification($cloudConvUser);
 
         try {
