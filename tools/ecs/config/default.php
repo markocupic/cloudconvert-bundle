@@ -12,7 +12,7 @@ use Symplify\EasyCodingStandard\ValueObject\Option;
 return ECSConfig::configure()
     ->withSets([SetList::CONTAO])
     ->withPaths([
-        __DIR__ . '/../../src',
+        __DIR__ . '/../../../src',
     ])
     ->withSkip([
         MethodChainingIndentationFixer::class => [

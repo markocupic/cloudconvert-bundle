@@ -7,10 +7,15 @@ services:
             $cloudConvertSandboxApiKey: '%markocupic_cloudconvert.sandbox_api_key%'
             $cloudConvertCacheDir: '%markocupic_cloudconvert.cache_dir%'
             $cloudConvertBackendAlertCreditLimit: '%markocupic_cloudconvert.backend_alert_credit_limit%'
-
-
+            $cloudConvertCreditExpirationNotificationEnabled: '%markocupic_cloudconvert.credit_expiration_notification.enabled%'
+            $cloudConvertCreditExpirationNotificationLimit: '%markocupic_cloudconvert.credit_expiration_notification.limit%'
+            $cloudConvertCreditExpirationNotificationEmail: '%markocupic_cloudconvert.credit_expiration_notification.email%'
 
     Markocupic\CloudconvertBundle\:
         resource: ../src/
-        exclude: ../src/{DependencyInjection}
+        exclude:
+            - ../src/ContaoManager/
+            - ../src/DependencyInjection/
+            - ../src/Exception/
+            - ../src/MarkocupicCloudconvertBundle.php
 

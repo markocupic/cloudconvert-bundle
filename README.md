@@ -14,6 +14,10 @@ Almost everything is possible:
 - csv -> xlsx
 - etc. For a full list of formats visit [Cloudconvert](https://cloudconvert.com/).
 
+## Requirements
+- Contao 5.3 or later, including Contao 6
+- PHP 8.1 or later (Contao 6 requires PHP 8.4)
+
 ## Free plan (25 credits per day)
 Get your **free API key** for using
   the **Cloudconvert API**: [Free Plan Cloudconvert](https://cloudconvert.com/pricing)
@@ -37,6 +41,8 @@ markocupic_cloudconvert:
 ```
 
 To complete the installation please run `composer install` in your command line.
+
+The credit expiration notification is sent once a day by the Contao cron job via the Symfony mailer. The sender address is the administrator email address from the Contao settings.
 
 ## Usage
 

@@ -14,99 +14,86 @@ declare(strict_types=1);
 
 namespace Markocupic\CloudconvertBundle\Tests\Conversion;
 
-use Contao\TestCase\ContaoTestCase;
 use Markocupic\CloudconvertBundle\Conversion\ConvertFile;
-use Markocupic\CloudconvertBundle\Logger\ContaoLogger;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Markocupic\CloudconvertBundle\Exception\SourceNotFoundException;
+use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 
-class ConvertFileTest extends ContaoTestCase
+class ConvertFileTest extends TestCase
 {
-    private ContainerBuilder $container;
-    private ConvertFile $cf;
+    private ConvertFile $convertFile;
 
     private string $source;
 
     protected function setUp(): void
     {
-        $this->container = $this->getContainerWithContaoConfiguration(sys_get_temp_dir());
-        $projectDir = $this->container->getParameter('kernel.project_dir');
-        $this->container->setParameter('markocupic_cloudconvert.api_key', 'api_key');
-        $cacheDir = sys_get_temp_dir().'/cloudconvert';
-        $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
-
-        $request = new Request([], [], [], [], [], [], 'FooBar');
         $requestStack = new RequestStack();
-        $requestStack->push($request);
+        $requestStack->push(new Request());
 
-        $logger = new ContaoLogger(null);
+        $this->convertFile = new ConvertFile($requestStack, new TokenStorage(), sys_get_temp_dir().'/cloudconvert', 'api_key');
 
-        $this->cf = new ConvertFile($requestStack, $logger, $cacheDir, $apiKey, '', null);
-
-        $this->source = $projectDir.'/msword.docx';
+        $this->source = sys_get_temp_dir().'/cloudconvert_test_msword.docx';
         file_put_contents($this->source, 'foo');
     }
 
     protected function tearDown(): void
     {
-        parent::tearDown();
-
         if (is_file($this->source)) {
             unlink($this->source);
         }
     }
 
-    public function testInstantiation(): void
-    {
-        $apiKey = $this->container->getParameter('markocupic_cloudconvert.api_key');
-        $cacheDir = sys_get_temp_dir().'/cloudconvert';
-
-        $request = new Request([], [], [], [], [], [], 'FooBar');
-        $requestStack = new RequestStack();
-        $requestStack->push($request);
-
-        $logger = new ContaoLogger(null);
-
-        $this->assertInstanceOf(ConvertFile::class, new ConvertFile($requestStack, $logger, $cacheDir, $apiKey,'', null));
-    }
-
-
     public function testSetSource(): void
     {
-        $this->cf->reset();
+        $this->convertFile->file($this->source);
 
-        $this->cf->file($this->source);
-        $this->assertSame($this->source, $this->cf->getSource());
+        $this->assertSame($this->source, $this->convertFile->getSource());
+    }
+
+    public function testThrowsIfSourceDoesNotExist(): void
+    {
+        $this->expectException(SourceNotFoundException::class);
+
+        $this->convertFile->file(sys_get_temp_dir().'/cloudconvert_test_missing.docx');
+    }
+
+    public function testResetClearsTheSource(): void
+    {
+        $this->convertFile->file($this->source);
+        $this->convertFile->reset();
+
+        $this->assertNull($this->convertFile->getSource());
     }
 
     public function testSetRemoveAndClearOptions(): void
     {
-        $this->cf->reset();
+        $this->convertFile->setOption('foo', 'bar');
+        $this->convertFile->setOption('bar', 'foo');
 
-        $this->cf->setOption('foo', 'bar');
-        $this->cf->setOption('bar', 'foo');
+        $this->assertSame(['foo' => 'bar', 'bar' => 'foo'], $this->convertFile->getOptions());
 
-        $opt = $this->cf->getOptions();
-        $this->assertSame(2, \count($opt));
-        $this->assertSame('bar', $opt['foo']);
+        $this->convertFile->removeOption('foo');
+        $this->assertSame(['bar' => 'foo'], $this->convertFile->getOptions());
 
-        $this->cf->removeOption('foo');
-        $opt = $this->cf->getOptions();
-        $this->assertSame(1, \count($opt));
-        $this->assertSame('foo', $opt['bar']);
-
-        $this->cf->clearOptions();
-        $this->assertSame([], $this->cf->getOptions());
+        $this->convertFile->clearOptions();
+        $this->assertSame([], $this->convertFile->getOptions());
     }
 
-    public function testGetApiKey(): void
+    public function testGetAndSetApiKey(): void
     {
-        $this->cf->reset();
+        $this->assertSame('api_key', $this->convertFile->getApiKey());
 
-        $this->assertSame('api_key', $this->cf->getApiKey());
+        $this->convertFile->setApiKey('custom_api_key');
+        $this->assertSame('custom_api_key', $this->convertFile->getApiKey());
+    }
 
-        $this->cf->setApiKey('custom_api_key');
-        $this->assertSame('custom_api_key', $this->cf->getApiKey());
+    public function testCacheHashCode(): void
+    {
+        $this->assertNull($this->convertFile->getCacheHashCode());
+
+        $this->convertFile->setCacheHashCode('abc');
+        $this->assertSame('abc', $this->convertFile->getCacheHashCode());
     }
 }
