@@ -19,77 +19,107 @@ use CloudConvert\Models\User;
 use Contao\Config;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsCronJob;
 use Contao\CoreBundle\Framework\ContaoFramework;
-use Contao\Email;
-use Contao\System;
 use Contao\Validator;
-use Http\Client\Exception;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Email;
 use Twig\Environment;
 
 #[AsCronJob('daily')]
 class NotifyUponCreditExpiryCron
 {
+    /**
+     * @param array<string> $cloudConvertCreditExpirationNotificationEmail
+     */
     public function __construct(
         private readonly ContaoFramework $framework,
         private readonly Environment $twig,
+        private readonly MailerInterface $mailer,
         private readonly string $cloudConvertApiKey,
+        private readonly bool $cloudConvertCreditExpirationNotificationEnabled,
+        private readonly int $cloudConvertCreditExpirationNotificationLimit,
+        private readonly array $cloudConvertCreditExpirationNotificationEmail,
         private readonly LoggerInterface $contaoErrorLogger,
     ) {
     }
 
     public function __invoke(): void
     {
+        if (!$this->cloudConvertCreditExpirationNotificationEnabled || $this->cloudConvertCreditExpirationNotificationLimit < 0) {
+            return;
+        }
+
         $this->framework->initialize();
 
-        $enabled = System::getContainer()->getParameter('markocupic_cloudconvert.credit_expiration_notification.enabled');
-        $limit = System::getContainer()->getParameter('markocupic_cloudconvert.credit_expiration_notification.limit');
-        $arrRecipientEmail = System::getContainer()->getParameter('markocupic_cloudconvert.credit_expiration_notification.email');
+        $recipients = $this->getValidRecipients();
 
-        if (true === $enabled && $limit >= 0 && !empty($arrRecipientEmail)) {
-            $arrRecipientEmail = array_map(
-                function ($email): string {
-                    if (!Validator::isEmail($email)) {
-                        $this->contaoErrorLogger->error(\sprintf('Invalid email "%s" set for CloudConvert credit expiration notification.', $email));
-                        $email = '';
-                    }
+        if (empty($recipients)) {
+            return;
+        }
 
-                    return $email;
-                },
-                $arrRecipientEmail,
-            );
+        $cloudConvertUser = $this->getCloudConvertUser();
 
-            $arrRecipientEmail = array_filter(array_unique($arrRecipientEmail));
+        if (null === $cloudConvertUser) {
+            $this->contaoErrorLogger->error('Could not establish connection to CloudConvert User API.');
 
-            $cloudConvUser = $this->getCloudConvertUser();
+            return;
+        }
 
-            if (null === $cloudConvUser) {
-                $this->contaoErrorLogger->error('Could not establish connection to CloudConvert User API.');
-            }
+        if ($cloudConvertUser->getCredits() >= $this->cloudConvertCreditExpirationNotificationLimit) {
+            return;
+        }
 
-            $credits = $cloudConvUser->getCredits();
-
-            if ($credits < $limit) {
-                if (!$this->notify($cloudConvUser, $arrRecipientEmail)) {
-                    $this->contaoErrorLogger->error(\sprintf('Could not send CloudConvert credit expiration notification to %s.', implode(', ', $arrRecipientEmail)));
-                }
-            }
+        if (!$this->notify($cloudConvertUser, $recipients)) {
+            $this->contaoErrorLogger->error(\sprintf('Could not send CloudConvert credit expiration notification to %s.', implode(', ', $recipients)));
         }
     }
 
-    private function notify(User $cloudConvUser, array $arrRecipientEmail): bool
+    /**
+     * @return array<string>
+     */
+    private function getValidRecipients(): array
     {
-        $senderEmail = $this->framework->getAdapter(Config::class)->get('adminEmail');
+        $validator = $this->framework->getAdapter(Validator::class);
+        $recipients = [];
 
-        $email = new Email();
-        $email->from = $senderEmail;
-        $email->subject = 'CloudConvert credits have reached expiration limit';
-        $email->text = $this->renderNotification($cloudConvUser);
+        foreach (array_unique($this->cloudConvertCreditExpirationNotificationEmail) as $email) {
+            if (!$validator->isEmail($email)) {
+                $this->contaoErrorLogger->error(\sprintf('Invalid email "%s" set for CloudConvert credit expiration notification.', $email));
+
+                continue;
+            }
+
+            $recipients[] = $email;
+        }
+
+        return $recipients;
+    }
+
+    /**
+     * @param array<string> $recipients
+     */
+    private function notify(User $cloudConvertUser, array $recipients): bool
+    {
+        $email = (new Email())
+            ->to(...$recipients)
+            ->subject('CloudConvert credits have reached expiration limit')
+            ->text($this->renderNotification($cloudConvertUser))
+        ;
+
+        $senderEmail = (string) $this->framework->getAdapter(Config::class)->get('adminEmail');
+
+        if ('' !== $senderEmail) {
+            $email->from($senderEmail);
+        }
 
         try {
-            return $email->sendTo(...$arrRecipientEmail);
-        } catch (\Exception) {
+            $this->mailer->send($email);
+        } catch (TransportExceptionInterface) {
             return false;
         }
+
+        return true;
     }
 
     private function getCloudConvertUser(): User|null
@@ -98,17 +128,17 @@ class NotifyUponCreditExpiryCron
             return (new CloudConvert([
                 'api_key' => $this->cloudConvertApiKey,
             ]))->users()->me();
-        } catch (Exception) {
+        } catch (\Throwable) {
             return null;
         }
     }
 
-    private function renderNotification(User $cloudConvUser): string
+    private function renderNotification(User $cloudConvertUser): string
     {
         return $this->twig->render('@MarkocupicCloudconvert/expiry_notification.txt.twig', [
-            'credits' => $cloudConvUser->getCredits(),
-            'username' => $cloudConvUser->getUsername(),
-            'email' => $cloudConvUser->getEmail(),
+            'credits' => $cloudConvertUser->getCredits(),
+            'username' => $cloudConvertUser->getUsername(),
+            'email' => $cloudConvertUser->getEmail(),
         ]);
     }
 }

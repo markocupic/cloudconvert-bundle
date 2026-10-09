@@ -1,40 +1,83 @@
 {
-  "name": "markocupic/cloudconvert-bundle",
-  "description": "This Bundle for the Contao CMS provides a OOP PHP wrapper for CloudConvert's API. Convert files from one filetype into an other with ease.",
-  "keywords": [
-    "file",
-    "converter",
-    "contao",
-    "cloudconvert"
-  ],
-  "type": "contao-bundle",
-  "license": "LGPL-3.0+",
-  "authors": [
-    {
-      "name": "Marko Cupic",
-      "email": "m.cupic@gmx.ch",
-      "homepage": "https://github.com/markocupic",
-      "role": "Developer"
+    "name": "markocupic/cloudconvert-bundle",
+    "description": "This Bundle for the Contao CMS provides a OOP PHP wrapper for CloudConvert's API. Convert files from one filetype into an other with ease.",
+    "keywords": [
+        "file",
+        "converter",
+        "contao",
+        "cloudconvert"
+    ],
+    "type": "contao-bundle",
+    "license": "LGPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Marko Cupic",
+            "email": "m.cupic@gmx.ch",
+            "homepage": "https://github.com/markocupic",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/markocupic/cloudconvert-bundle/issues",
+        "source": "https://github.com/markocupic/cloudconvert-bundle"
+    },
+    "require": {
+        "php": "^8.1",
+        "cloudconvert/cloudconvert-php": "^3.2",
+        "contao/core-bundle": "^5.3 || ^6.0",
+        "psr/log": "^1.1 || ^2.0 || ^3.0",
+        "symfony/config": "^6.4 || ^7.0 || ^8.0",
+        "symfony/dependency-injection": "^6.4 || ^7.0 || ^8.0",
+        "symfony/filesystem": "^6.4 || ^7.0 || ^8.0",
+        "symfony/http-foundation": "^6.4 || ^7.0 || ^8.0",
+        "symfony/http-kernel": "^6.4 || ^7.0 || ^8.0",
+        "symfony/mailer": "^6.4 || ^7.0 || ^8.0",
+        "symfony/mime": "^6.4 || ^7.0 || ^8.0",
+        "symfony/security-bundle": "^6.4 || ^7.0 || ^8.0",
+        "symfony/security-core": "^6.4 || ^7.0 || ^8.0",
+        "twig/twig": "^3.8"
+    },
+    "require-dev": {
+        "contao/manager-plugin": "^2.0",
+        "contao/test-case": "^5.3 || ^6.0"
+    },
+    "conflict": {
+        "contao/manager-plugin": "<2.0 || >=3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Markocupic\\CloudconvertBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Markocupic\\CloudconvertBundle\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "contao-manager-plugin": "Markocupic\\CloudconvertBundle\\ContaoManager\\Plugin"
+    },
+    "config": {
+        "allow-plugins": {
+            "contao-components/installer": false,
+            "contao/manager-plugin": false,
+            "php-http/discovery": false,
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "contao-community-alliance/composer-plugin": true
+        },
+        "policy": {
+            "advisories": {
+                "ignore-id": [
+                    "PKSA-8j6w-3kr7-s9xk",
+                    "PKSA-6j95-1jtb-x6wc",
+                    "PKSA-cbx2-m9db-bmzd"
+                ]
+            }
+        }
+    },
+    "scripts": {
+        "cs-fixer": "@php tools/ecs/vendor/bin/ecs check --config tools/ecs/config/default.php --fix --ansi",
+        "cs-check": "@php tools/ecs/vendor/bin/ecs check --config tools/ecs/config/default.php --ansi",
+        "unit-tests": "@php vendor/bin/phpunit --colors=always"
     }
-  ],
-  "support": {
-    "issues": "https://github.com/markocupic/cloudconvert-bundle/issues",
-    "source": "https://github.com/markocupic/cloudconvert-bundle"
-  },
-  "require": {
-    "php": "^8.1",
-    "contao/core-bundle": "^4.13 || ^5.0",
-    "cloudconvert/cloudconvert-php": "^3.2"
-  },
-  "require-dev": {
-    "contao/easy-coding-standard": "^6.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "Markocupic\\CloudconvertBundle\\": "src/"
-    }
-  },
-  "extra": {
-    "contao-manager-plugin": "Markocupic\\CloudconvertBundle\\ContaoManager\\Plugin"
-  }
 }

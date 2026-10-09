@@ -17,6 +17,7 @@ namespace Markocupic\CloudconvertBundle\EventListener\ContaoHook;
 use CloudConvert\CloudConvert;
 use CloudConvert\Exceptions\HttpClientException;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
+use Contao\StringUtil;
 use Symfony\Bundle\SecurityBundle\Security;
 
 #[AsHook('getSystemMessages')]
@@ -44,8 +45,9 @@ class GetSystemMessagesListener
                 'api_key' => $this->cloudConvertApiKey,
             ]);
 
-            $credits = $cloudConvert->users()->me()->getCredits();
-            $user = $cloudConvert->users()->me()->getUsername();
+            $cloudConvertUser = $cloudConvert->users()->me();
+            $credits = $cloudConvertUser->getCredits();
+            $user = $cloudConvertUser->getUsername();
         } catch (HttpClientException) {
             return '<p class="tl_error">Could not authenticate against the CloudConvert api firewall. Please check your API token in your config/config.yaml.</p>';
         } catch (\Exception) {
@@ -55,8 +57,8 @@ class GetSystemMessagesListener
         if ($credits < $this->cloudConvertBackendAlertCreditLimit) {
             return \sprintf(
                 '<p class="tl_info">Remaining <a href="https://cloudconvert.com/dashboard" title="CloudConvert"><u>CloudConvert</u></a> credits for user "%s": %s</p>',
-                $user,
-                $credits,
+                StringUtil::specialchars((string) $user),
+                (int) $credits,
             );
         }
 
